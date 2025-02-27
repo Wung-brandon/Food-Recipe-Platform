@@ -11,6 +11,7 @@ import NotFoundPage from "./NotFound.page";
 import CartPage from "./Cart.page";
 import RecipeDetails from "./RecipeDetails.page";
 import ChatPage from "./Chat.page";
+import UserProfilePage from "./UserProfile.page";
 export {
     Home,
     About,
@@ -24,6 +25,7 @@ export {
     NotFoundPage,
     CartPage,
     RecipeDetails,
-    ChatPage
+    ChatPage,
+    UserProfilePage,
  
 };

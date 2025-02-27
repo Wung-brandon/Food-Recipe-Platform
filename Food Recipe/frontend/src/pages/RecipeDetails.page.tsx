@@ -39,6 +39,9 @@ import {
 } from '@mui/icons-material';
 import TitleText from '../components/TitleText';
 import { spaghetti } from '../components/images';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+
 
 // Types
 interface Ingredient {
@@ -302,8 +305,45 @@ const RecipeDetails: React.FC = () => {
   };
 
   const handleShareRecipe = (platform: string) => {
-    // In a real app, implement sharing functionality
-    console.log(`Sharing recipe to ${platform}`);
+    if (!recipe) return;
+    
+    const recipeUrl = window.location.href;
+    const recipeTitle = recipe.title;
+    const recipeDescription = recipe.description.substring(0, 100) + '...';
+    
+    switch (platform) {
+      case 'Facebook':
+        window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(recipeUrl)}`, '_blank');
+        break;
+      case 'Twitter':
+        window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(recipeTitle)}&url=${encodeURIComponent(recipeUrl)}`, '_blank');
+        break;
+      case 'WhatsApp':
+        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(recipeTitle + ' - ' + recipeUrl)}`, '_blank');
+        break;
+      case 'Pinterest':
+        window.open(`https://pinterest.com/pin/create/button/?url=${encodeURIComponent(recipeUrl)}&media=${encodeURIComponent(recipe.image)}&description=${encodeURIComponent(recipeTitle)}`, '_blank');
+        break;
+      case 'Email':
+        window.open(`mailto:?subject=${encodeURIComponent(recipeTitle)}&body=${encodeURIComponent(recipeDescription + '\n\nCheck out the full recipe here: ' + recipeUrl)}`, '_blank');
+        break;
+      case 'Copy Link':
+        navigator.clipboard.writeText(recipeUrl)
+          .then(() => {
+            // Show success message
+            alert('Recipe link copied to clipboard!');
+          })
+          .catch(err => {
+            console.error('Failed to copy link: ', err);
+          });
+        break;
+      default:
+        console.log(`Sharing to ${platform} not implemented yet`);
+    }
+    
+    // Log analytics event
+    console.log(`Recipe shared to ${platform}`);
+    // Close the dialog
     setShowShareDialog(false);
   };
 
@@ -313,9 +353,119 @@ const RecipeDetails: React.FC = () => {
     window.print();
   };
 
-  const handleDownloadPdf = () => {
-    // In a real app, implement PDF download
-    console.log('Downloading recipe as PDF');
+  const handleDownloadPdf = async () => {
+    if (!recipe) return;
+    
+    try {
+      // Show loading state
+      setLoading(true);
+      
+      // Create a new container to render the recipe content for PDF
+      const pdfContainer = document.createElement('div');
+      pdfContainer.className = 'pdf-container';
+      pdfContainer.style.width = '700px';
+      pdfContainer.style.padding = '20px';
+      pdfContainer.style.position = 'absolute';
+      pdfContainer.style.left = '-9999px';
+      
+      // Add recipe content
+      pdfContainer.innerHTML = `
+        <div style="text-align: center; margin-bottom: 20px;">
+          <h1 style="font-size: 24px; color: #333;">${recipe.title}</h1>
+          <p style="color: #666;">By ${recipe.author.name}</p>
+        </div>
+        <div style="margin-bottom: 20px;">
+          <img src="${recipe.image}" style="width: 100%; max-height: 300px; object-fit: cover; border-radius: 8px;" />
+        </div>
+        <div style="margin-bottom: 20px;">
+          <p>${recipe.description}</p>
+        </div>
+        <div style="display: flex; gap: 15px; margin-bottom: 20px;">
+          <div style="flex: 1; text-align: center; padding: 10px; background: #f9f5eb; border-radius: 5px;">
+            <p style="font-weight: bold;">Prep Time</p>
+            <p>${recipe.preparationTime} min</p>
+          </div>
+          <div style="flex: 1; text-align: center; padding: 10px; background: #f9f5eb; border-radius: 5px;">
+            <p style="font-weight: bold;">Cook Time</p>
+            <p>${recipe.cookingTime} min</p>
+          </div>
+          <div style="flex: 1; text-align: center; padding: 10px; background: #f9f5eb; border-radius: 5px;">
+            <p style="font-weight: bold;">Servings</p>
+            <p>${recipe.servings}</p>
+          </div>
+        </div>
+        <div style="margin-bottom: 20px;">
+          <h2 style="font-size: 20px; color: #333;">Ingredients</h2>
+          <ul style="padding-left: 20px;">
+            ${recipe.ingredients.map(ing => `<li>${ing.amount} ${ing.name}</li>`).join('')}
+          </ul>
+        </div>
+        <div style="margin-bottom: 20px;">
+          <h2 style="font-size: 20px; color: #333;">Instructions</h2>
+          <ol style="padding-left: 20px;">
+            ${recipe.steps.map(step => `<li style="margin-bottom: 10px;">${step.description}</li>`).join('')}
+          </ol>
+        </div>
+        <div style="margin-bottom: 20px;">
+          <h2 style="font-size: 20px; color: #333;">Chef's Tips</h2>
+          <ul style="padding-left: 20px;">
+            ${recipe.tips.map(tip => `<li>${tip}</li>`).join('')}
+          </ul>
+        </div>
+        <div style="text-align: center; margin-top: 30px; font-size: 12px; color: #999;">
+          <p>Downloaded from PerfectRecipe.com on ${new Date().toLocaleDateString()}</p>
+        </div>
+      `;
+      
+      // Add container to body
+      document.body.appendChild(pdfContainer);
+      
+      // Generate PDF using html2canvas and jsPDF
+      const canvas = await html2canvas(pdfContainer, {
+        scale: 2,
+        useCORS: true,
+        logging: false
+      });
+      
+      // Configure PDF
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+      
+      // Calculate dimensions
+      const imgWidth = 210; // A4 width in mm
+      const imgHeight = canvas.height * imgWidth / canvas.width;
+      
+      let position = 0;
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      
+      // If content is longer than the page, add new pages
+      const pageHeight = 297; // A4 height in mm
+      
+      while (position < imgHeight) {
+        position += pageHeight - 10;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, -position, imgWidth, imgHeight);
+      }
+      
+      // Save the PDF
+      pdf.save(`${recipe.title.replace(/\s+/g, '-').toLowerCase()}.pdf`);
+      
+      // Clean up
+      document.body.removeChild(pdfContainer);
+      
+      // Log analytics event
+      console.log('Recipe PDF downloaded');
+      
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Failed to generate PDF. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleChatWithAuthor = () => {
@@ -567,10 +717,12 @@ const RecipeDetails: React.FC = () => {
               transition={{ delay: 0.3 }}
               className="flex items-center gap-4 bg-white p-4 rounded-lg shadow-sm mb-8"
             >
+              
               <Avatar 
                 src={recipe.author.avatar} 
                 alt={recipe.author.name}
-                className="w-16 h-16"
+                className="w-16 h-16 cursor-pointer"
+                onClick={() => navigate(`/user/${recipe.author.id}`)}
               />
               <div className="flex-1">
                 <Typography variant="subtitle1" className="font-medium">

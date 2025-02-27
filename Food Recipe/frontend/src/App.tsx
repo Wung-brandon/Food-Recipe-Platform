@@ -13,7 +13,8 @@ import {
   NotFoundPage,
   CartPage,
   RecipeDetails,
-  ChatPage 
+  ChatPage,
+  UserProfilePage
 } from './pages'
 import Navbar from './components/common/Navbar'
 import Footer from './components/common/Footer'
@@ -40,6 +41,7 @@ function App() {
           <Route path="/category/:categoryId" element={<CategoryDetails />} />
           <Route path="/recipe/:recipeId" element={<RecipeDetails />} />
           <Route path="/chat/:userId" element={<ChatPage />} />
+          <Route path="/user/:userId" element={<UserProfilePage />} />
         </Routes>
         <Footer />
       </Router>
