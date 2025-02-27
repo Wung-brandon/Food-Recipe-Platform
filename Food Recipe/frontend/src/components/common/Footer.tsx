@@ -6,7 +6,7 @@ const Footer: React.FC = () => {
   return (
     <>
       {/* Footer */}
-      <footer className="bg-gray-900 text-white py-10 px-8 mt-16">
+      <footer className="bg-gray-900 text-white py-10 px-8">
         <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8">
           <div>
             <h3 className="text-lg font-semibold">PerfectRecipe</h3>
@@ -16,9 +16,13 @@ const Footer: React.FC = () => {
             <h3 className="text-lg font-semibold">Quick Links</h3>
             <ul className="mt-4 space-y-2">
               <li><NavLink to="/" className="text-gray-400 no-underline hover:text-white">Home</NavLink></li>
-              <li><NavLink to="/recipe" className="text-gray-400 no-underline hover:text-white">Recipe</NavLink></li>
-              <li><NavLink to="/add-recipe" className="text-gray-400 no-underline hover:text-white">Add Recipe</NavLink></li>
+              <li><NavLink to="/recipe" className="text-gray-400 no-underline hover:text-white">Explore Recipe</NavLink></li>
+              <li><NavLink to="/shop" className="text-gray-400 no-underline hover:text-white">Shop</NavLink></li>
+              <li><NavLink to="/cart" className="text-gray-400 no-underline hover:text-white">Cart</NavLink></li>
               <li><NavLink to="/about" className="text-gray-400 no-underline hover:text-white">About Us</NavLink></li>
+              <li><NavLink to="/contact" className="text-gray-400 no-underline hover:text-white">Contact Us</NavLink></li>
+              <li><NavLink to="/login" className="text-gray-400 no-underline hover:text-white">Login</NavLink></li>
+              <li><NavLink to="/signup" className="text-gray-400 no-underline hover:text-white">SignUp</NavLink></li>
             </ul>
           </div>
           <div>
@@ -26,8 +30,9 @@ const Footer: React.FC = () => {
             <ul className="mt-4 space-y-2">
               <li><NavLink to="/category/breakfast" className="text-gray-400 no-underline hover:text-white">Breakfast</NavLink></li>
               <li><NavLink to="/category/lunch" className="text-gray-400 no-underline hover:text-white">Lunch</NavLink></li>
-              <li><NavLink to="/category/dinner" className="text-gray-400 no-underline hover:text-white">Dinner</NavLink></li>
+              <li><NavLink to="/category/vegetarian" className="text-gray-400 no-underline hover:text-white">Vegetarian</NavLink></li>
               <li><NavLink to="/category/desserts" className="text-gray-400 no-underline hover:text-white">Desserts</NavLink></li>
+              <li><NavLink to="/category/baked-food" className="text-gray-400 no-underline hover:text-white">Baked Food</NavLink></li>
             </ul>
           </div>
           <div>

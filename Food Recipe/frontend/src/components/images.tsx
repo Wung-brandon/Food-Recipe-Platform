@@ -12,11 +12,12 @@ import katikati from "../assets/images/katikati.jpg"
 import njama from "../assets/images/Njama Njama and FuFu.jpg"
 import hamburger from "../assets/images/Hambúrguer Lanche PNG Transparente.jpg"
 import pizza from "../assets/images/Pizza Vários Sabores PNG Transparente (1).jpg"
-
+import chef from "../assets/images/male chef.jpg"
 export {
     chicken,
     beans,
     delicious,
+    chef,
     plantain,
     spaghetti,
     ekwang,

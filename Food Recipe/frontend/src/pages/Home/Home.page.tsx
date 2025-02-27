@@ -1,24 +1,22 @@
-import foodImg2 from "../../assets/images/pngegg (2).png";
-import categoryImg from "../../assets/images/pngegg (2).png"; // Add images for categories
-import { FaHeart, FaStar, FaShareAlt } from "react-icons/fa";
 import HeroSection from "../../components/Hero.components";
-import CategoryCarousel from "../../components/Carousel";
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Button, Container, Typography, useMediaQuery, useTheme } from '@mui/material';
-import { Search, Favorite, TrendingUp, Restaurant, AccessTime } from '@mui/icons-material';
+import CategoryCarousel from "../../components/Categories";
+import React from 'react';
+import { motion } from 'framer-motion';
+import { Typography } from "@mui/material";
 import FeaturedRecipes from "../../components/FeaturedRecipe";
 import TestimonialSection from "../../components/Testimonials";
 import VideoSection from "../../components/Video";
 import NewsletterSignup from "../../components/Newsletter";
 import TitleText from "../../components/TitleText";
+import { useNavigate } from "react-router-dom";
 const Home: React.FC = () => {
+  const navigate = useNavigate();
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5 }}
-      className="min-h-screen bg-gradient-to-b from-gray-50 to-white"
+      className="min-h-screen bg-gradient-to-b from-gray-50 to-white overflow-x-hidden"
     >
       {/* <div className="relative w-full bg-white"> */}
         {/* Navbar */}
@@ -26,6 +24,7 @@ const Home: React.FC = () => {
 
         {/* Hero Section */}
         <HeroSection />
+        {/* <LandingPage /> */}
 
         {/* Main Content */}
       
@@ -67,7 +66,10 @@ const Home: React.FC = () => {
 
         {/* Centered Button */}
         <div className="flex justify-center mt-8">
-          <button className="bg-amber-600 text-white font-semibold text-sm sm:text-lg px-6 py-3 rounded-full shadow-md transition-all duration-300 hover:bg-amber-700 hover:scale-105">
+          <button className="bg-amber-600 text-white font-semibold text-sm sm:text-lg px-6 py-3 rounded-full shadow-md transition-all 
+          duration-300 hover:bg-amber-700 hover:scale-105"
+          onClick={() => navigate('/explore-recipe')}
+          >
             View All Recipes
           </button>
         </div>
