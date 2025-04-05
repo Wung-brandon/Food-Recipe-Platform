@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verify Your Email</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f9f9f9;
+      color: #333333;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .header {
+      background-color: #d97706; /* amber-600 */
+      padding: 24px;
+      text-align: center;
+    }
+    .header img {
+      max-width: 180px;
+      height: auto;
+    }
+    .content {
+      padding: 32px 24px;
+      line-height: 1.6;
+    }
+    .footer {
+      background-color: #f3f4f6;
+      padding: 16px 24px;
+      text-align: center;
+      font-size: 12px;
+      color: #6b7280;
+    }
+    h1 {
+      margin: 0;
+      color: #ffffff;
+      font-size: 24px;
+      font-weight: 600;
+    }
+    p {
+      margin: 16px 0;
+    }
+    .button {
+      display: inline-block;
+      padding: 12px 24px;
+      background-color: #d97706; /* amber-600 */
+      color: white;
+      text-decoration: none;
+      border-radius: 4px;
+      font-weight: 500;
+      margin: 16px 0;
+    }
+    .highlight {
+      font-weight: 600;
+      color: #d97706; /* amber-600 */
+    }
+    .divider {
+      height: 1px;
+      width: 100%;
+      background-color: #e5e7eb;
+      margin: 24px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>PerfectRecipe</h1>
+    </div>
+    <div class="content">
+      <p>Hello <span class="highlight">{{user.username}}</span>,</p>
+      <p>Thank you for joining our community of culinary enthusiasts! We're excited to have you on board and can't wait to see what delicious recipes you'll discover and share.</p>
+      <p>To complete your registration and start exploring our vast collection of recipes, please verify your email address by clicking the button below:</p>
+      <div style="text-align: center;">
+        <a href="{{verification_link}}" class="button">Verify Email Address</a>
+      </div>
+      <p>This link will expire in 24 hours for security reasons. If you didn't create an account with us, please disregard this email.</p>
+      <div class="divider"></div>
+      <p>If the button doesn't work, copy and paste this URL into your browser:</p>
+      <p style="font-size: 12px; word-break: break-all;">{{verification_link}}</p>
+    </div>
+    <div class="footer">
+      <p>&copy; 2025 Culinary Creations. All rights reserved.</p>
+      <p>This email was sent to verify your account. Please do not reply to this message.</p>
+    </div>
+  </div>
+</body>
+</html>

@@ -23,6 +23,7 @@ const Footer: React.FC = () => {
               <li><NavLink to="/contact" className="text-gray-400 no-underline hover:text-white">Contact Us</NavLink></li>
               <li><NavLink to="/login" className="text-gray-400 no-underline hover:text-white">Login</NavLink></li>
               <li><NavLink to="/signup" className="text-gray-400 no-underline hover:text-white">SignUp</NavLink></li>
+              <li><NavLink to="/dashboard" className="text-gray-400 no-underline hover:text-white">Dashboard</NavLink></li>
             </ul>
           </div>
           <div>

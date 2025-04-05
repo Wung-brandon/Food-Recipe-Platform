@@ -130,12 +130,12 @@ REST_FRAMEWORK = {
 }
 
 # Email configuration
-# EMAIL_BACKEND = env('EMAIL_BACKEND',)
-# EMAIL_HOST = env('EMAIL_HOST',)
-# EMAIL_PORT = env.int('EMAIL_PORT',)
-# EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS',)
-# EMAIL_HOST_USER = env('EMAIL_HOST_USER',)
-# EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD',)
+EMAIL_BACKEND = env('EMAIL_BACKEND',)
+EMAIL_HOST = env('EMAIL_HOST',)
+EMAIL_PORT = env.int('EMAIL_PORT',)
+EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS',)
+EMAIL_HOST_USER = env('EMAIL_HOST_USER',)
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD',)
 FRONTEND_URL = env('FRONTEND_URL',)
 # Internationalization
 # https://docs.djangoproject.com/en/4.2/topics/i18n/

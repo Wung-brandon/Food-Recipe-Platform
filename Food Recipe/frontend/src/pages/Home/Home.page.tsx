@@ -9,8 +9,13 @@ import VideoSection from "../../components/Video";
 import NewsletterSignup from "../../components/Newsletter";
 import TitleText from "../../components/TitleText";
 import { useNavigate } from "react-router-dom";
+import { toast } from 'react-toastify';
+
+
+
 const Home: React.FC = () => {
   const navigate = useNavigate();
+  
   return (
     <motion.div
       initial={{ opacity: 0 }}

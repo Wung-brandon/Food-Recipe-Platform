@@ -1,19 +1,71 @@
 import React, { useState } from "react";
-import { TextField, Button, Typography, InputAdornment, IconButton } from "@mui/material";
+import {
+  TextField,
+  Button,
+  Typography,
+  InputAdornment,
+  IconButton,
+  CircularProgress,
+} from "@mui/material";
 import { Link, useLocation } from "react-router-dom";
 import { Visibility, VisibilityOff, Email, Lock } from "@mui/icons-material";
 import { spaghetti } from "../components/images";
-
+import { useAuth } from "../context/AuthContext";
+import { toast } from "react-toastify";
 const AuthPage: React.FC = () => {
   const location = useLocation();
   const isSignup = location.pathname === "/signup";
 
+  const { login, register } = useAuth();
+
+  const [loading, setLoading] = useState<boolean>(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [formData, setFormData] = useState({
+    username: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+  });
+  
+
+  // Handle Input Change
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  
+
+  // Handle Form Submission
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    
+
+    try {
+      if (isSignup) {
+        if (formData.password !== formData.confirmPassword) {
+          toast.error("Passwords do not match")
+          // setError("Passwords do not match");
+          setLoading(false);
+          return;
+        }
+        await register(formData.username, formData.email, formData.password, formData.confirmPassword);
+      } else {
+        await login(formData.email, formData.password);
+      }
+   
+    } catch (err: any) {
+      toast.error(err.message || "An error occurred")
+      // setError(err.message || "An error occurred");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-100 px-4">
       <div className="bg-white shadow-lg rounded-lg flex flex-col md:flex-row w-full max-w-4xl">
-        {/* Image Section - Hidden on Small Screens */}
+        {/* Image Section */}
         <div className="hidden md:flex md:w-1/2">
           <img src={spaghetti} alt="Food" className="w-full h-full object-cover rounded-l-lg" />
         </div>
@@ -24,29 +76,30 @@ const AuthPage: React.FC = () => {
             {isSignup ? "Join PerfectRecipe" : "Welcome Back"}
           </Typography>
           <Typography className="text-gray-500 py-6">
-            {isSignup
-              ? "Create an account to explore and share recipes!"
-              : "Log in to access your favorite recipes."}
+            {isSignup ? "Create an account to explore and share recipes!" : "Log in to access your favorite recipes."}
           </Typography>
 
-          <form className="w-full space-y-4">
+
+          <form className="w-full space-y-4" onSubmit={handleSubmit}>
             {isSignup && (
               <TextField
                 fullWidth
-                label="Full Name"
+                label="Username"
+                name="username"
                 variant="outlined"
                 required
-                className="hover:border-amber-600 focus:ring-amber-600"
+                onChange={handleChange}
               />
             )}
 
             <TextField
               fullWidth
               label="Email"
+              name="email"
               variant="outlined"
               type="email"
               required
-              className="hover:border-amber-600 focus:ring-amber-600"
+              onChange={handleChange}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -59,10 +112,11 @@ const AuthPage: React.FC = () => {
             <TextField
               fullWidth
               label="Password"
+              name="password"
               variant="outlined"
               type={showPassword ? "text" : "password"}
               required
-              className="hover:border-amber-600 focus:ring-amber-600"
+              onChange={handleChange}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -83,10 +137,11 @@ const AuthPage: React.FC = () => {
               <TextField
                 fullWidth
                 label="Confirm Password"
+                name="confirmPassword"
                 variant="outlined"
                 type="password"
                 required
-                className="hover:border-amber-600 focus:ring-amber-600"
+                onChange={handleChange}
               />
             )}
 
@@ -100,9 +155,11 @@ const AuthPage: React.FC = () => {
               fullWidth
               variant="contained"
               className="bg-amber-600 hover:bg-amber-700 text-white py-2"
-              sx={{backgroundColor: '#d97706'}}
+              sx={{ backgroundColor: "#d97706" }}
+              type="submit"
+              disabled={loading}
             >
-              {isSignup ? "Sign Up" : "Login"}
+              {loading ? <CircularProgress size={24} sx={{ color: "white" }} /> : isSignup ? "Sign Up" : "Login"}
             </Button>
           </form>
 

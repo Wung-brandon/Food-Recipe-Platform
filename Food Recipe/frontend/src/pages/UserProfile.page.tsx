@@ -305,12 +305,16 @@ const UserProfilePage: React.FC = () => {
             <div className="flex gap-4 mt-4">
               <Button 
                 variant="contained" 
-                color={isFollowing ? 'secondary' : 'primary'}
                 onClick={handleFollowToggle}
+                sx={{backgroundColor: '#D97706'}}
               >
                 {isFollowing ? 'Unfollow' : 'Follow'}
               </Button>
-              <Button variant="outlined" onClick={handleMessageUser}>
+              <Button 
+                    variant="outlined"
+                    onClick={handleMessageUser}
+                    sx={{border: '2px solid #D97706', color: '#D97706', fontWeight:'bold'}}
+               >
                 Message
               </Button>
             </div>

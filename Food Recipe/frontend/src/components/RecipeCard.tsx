@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import RecipeData from '../types/Recipe';
+// import RecipeData from '../types/Recipe';
 import { 
   Avatar,
   IconButton, 
@@ -9,9 +9,8 @@ import {
  } from '@mui/material';
 import { Share } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
-
-// const RecipeCard: React.FC<{ recipe: RecipeData }> = ({ recipe }) => {
 //   return (
 //     <Card className="h-full rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300">
 //       {/* Recipe Image with Bookmark Button */}
@@ -127,10 +126,11 @@ import { Link } from 'react-router-dom';
 //   );
 // };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const RecipeCard: React.FC<{ recipe: any }> = ({ recipe }) => {
   const [liked, setLiked] = useState(recipe.isLiked);
   const [saved, setSaved] = useState(recipe.isSaved);
-  
+  const navigate = useNavigate()
   return (
     <motion.div 
       className="bg-white rounded-xl overflow-hidden shadow-lg"
@@ -161,9 +161,12 @@ const RecipeCard: React.FC<{ recipe: any }> = ({ recipe }) => {
       
       <div className="p-4">
       <div className="flex justify-between items-center mb-2">
-          <span className="text-xs font-medium text-amber-600 px-2 py-1 bg-amber-100 rounded-full">
+        <Link to={`/category/${recipe.category.id}`} className='no-underline'>
+          <span className="text-xs font-medium text-amber-600 px-2 py-1 bg-amber-100 cursor-pointer hover:bg-amber-300 
+          hover:text-white rounded-full">
             {recipe.category}
           </span>
+        </Link>
           <div className="flex items-center">
             <span className="text-xs text-gray-500">{recipe.cookTime} min</span>
             <span className="mx-1 text-gray-300">•</span>
@@ -190,8 +193,9 @@ const RecipeCard: React.FC<{ recipe: any }> = ({ recipe }) => {
             <Avatar 
               src={recipe.author.avatarUrl} 
               alt={recipe.author.name}
-              className="w-6 h-6"
+              className="w-6 h-6 cursor-pointer"
               sx={{ width: 24, height: 24 }}
+              onClick={() => navigate(`/user/${recipe.author.id}`)}
             />
             <span className="ml-2 text-xs text-gray-600">{recipe.author.name}</span>
           </div>

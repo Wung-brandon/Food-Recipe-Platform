@@ -1,6 +1,7 @@
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
 from django.utils import timezone
+from django.db.models.signals import post_save
 
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, username, password=None, **extra_fields):
@@ -31,6 +32,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     username = models.CharField(max_length=100, blank=True, null=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
+    is_verified = models.BooleanField(default=False)
     date_joined = models.DateTimeField(default=timezone.now)
     
     objects = CustomUserManager()
@@ -51,6 +53,16 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return f"{self.user.email}'s Profile"
+    
+def create_profile(sender, created, instance, **kwargs):
+    if created:
+        UserProfile.objects.create(user=instance)
+
+def save_profile(sender, instance, **kwargs):
+    instance.profile.save()
+    
+post_save.connect(create_profile, sender=CustomUser)
+post_save.connect(save_profile, sender=CustomUser)
 
 class UserFollowing(models.Model):
     user = models.ForeignKey(CustomUser, related_name='following', on_delete=models.CASCADE)

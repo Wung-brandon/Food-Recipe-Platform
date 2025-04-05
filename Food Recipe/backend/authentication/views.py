@@ -1,171 +1,278 @@
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.tokens import default_token_generator
-from django.core.mail import send_mail
-from django.conf import settings
-from rest_framework import status
+from rest_framework_simplejwt.views import TokenObtainPairView
+from .serializers import ( MyTokenObtainPairSerializer, 
+                           UserProfileSerializer, 
+                           SignUpSerializer, 
+                           EmailSerializer, 
+                           UserSerializer, 
+                           ResetPasswordSerializer,
+                           UserFollowingSerializer,
+                           EmailVerificationSerializer,
+                           ResendVerificationEmailSerializer
+                        )
+from rest_framework.generics import RetrieveAPIView, ListCreateAPIView, RetrieveUpdateDestroyAPIView
+from rest_framework.views import APIView
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.generics import GenericAPIView
+from rest_framework import status
+from rest_framework.response import Response
+from django.urls import reverse
+from django.shortcuts import redirect
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode 
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
+from .utils import send_notification
+from django.conf import settings
+from rest_framework.parsers import FormParser, MultiPartParser
 import logging
 # from google.oauth2 import id_token
 # from google.auth.transport import requests
 
 from .models import CustomUser, UserProfile, UserFollowing
-from .serializers import UserSerializer, UserProfileSerializer
 
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def register_user(request):
-    logger.info("Register API called with data: %s", request.data)
-    serializer = UserSerializer(data=request.data)
-    if serializer.is_valid():
-        try:
-            user = serializer.save()
-            logger.info("User created successfully: %s", user.email)
+class MyTokenObtainPairView(TokenObtainPairView):
+    serializer_class = MyTokenObtainPairSerializer
+    permission_classes = [AllowAny]
 
-            # Create user profile
-            UserProfile.objects.create(
-                user=user,
-                full_name=request.data.get('username', user.email.split('@')[0])
+class SignUpView(GenericAPIView):
+    serializer_class = SignUpSerializer
+    permission_classes = [AllowAny]
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        logger.info("Signup request received")
+        if serializer.is_valid():
+            logger.info("User data is valid, saving user...")
+            serializer.save()
+
+            try:
+                # Generate verification token and link
+                user_data = serializer.data
+                user = User.objects.get(email=user_data["email"])
+                uid = urlsafe_base64_encode(force_bytes(user.pk))
+                token = PasswordResetTokenGenerator().make_token(user)
+                verification_link = request.build_absolute_uri(
+                    reverse('verify-email', kwargs={'uidb64': uid, 'token': token})
+                )
+                
+                context = {
+                    "user" : user,
+                    "verification_link" : verification_link
+                }
+
+                # Create the message as a string
+                template_path = "Account_verify/verification_email.html"
+                subject = "Verify your Account"
+
+                # Send verification email
+                send_notification(user, subject, template_path, context)
+
+                return Response(
+                    {"message": "Registration successful. Please check your email to verify your account."},
+                    status=status.HTTP_201_CREATED
+                )
+             
+            except Exception as e:
+                logger.error(f"Error in signup: {e}")
+                return Response(
+                    {"message": f"Registration failed: {str(e)}"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
+        return Response(
+                {"message": "Something went wrong."},
+                status=status.HTTP_400_BAD_REQUEST
             )
-            logger.info("User profile created for: %s", user.email)
+            
+class GetUserView(RetrieveAPIView):
+    queryset = CustomUser.objects.all()
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated]
 
-            # Generate JWT tokens
-            refresh = RefreshToken.for_user(user)
-            return Response({
-                'user': UserSerializer(user).data,
-                'refresh': str(refresh),
-                'access': str(refresh.access_token)
-            }, status=status.HTTP_201_CREATED)
+    def get_object(self):
+        return self.request.user
 
-        except Exception as e:
-            logger.error("Error while creating user: %s", str(e))
-            return Response({'error': 'Internal server error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-    logger.warning("Invalid registration data: %s", serializer.errors)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    def get(self, request, *args, **kwargs):
+        user = self.get_object()
+        serializer = self.get_serializer(user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def login_user(request):
-    logger.info("Login API called with email: %s", request.data.get('email'))
+class ListCreateUserProfileView(ListCreateAPIView):
+    queryset = UserProfile.objects.all()
+    serializer_class = UserProfileSerializer
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
 
-    email = request.data.get('email')
-    password = request.data.get('password')
-
-    user = authenticate(request, email=email, password=password)
-
-    if user:
-        login(request, user)
-        logger.info("User logged in: %s", email)
-
-        # Generate JWT tokens
-        refresh = RefreshToken.for_user(user)
-        return Response({
-            'user': UserSerializer(user).data,
-            'refresh': str(refresh),
-            'access': str(refresh.access_token)
-        })
-
-    logger.warning("Invalid login attempt for email: %s", email)
-    return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
-
-# @api_view(['POST'])
-# @permission_classes([AllowAny])
-# def google_login(request):
-    token = request.data.get('token')
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+        return Response("Profile Created Successfully", status=status.HTTP_200_OK)
     
-    try:
-        # Verify Google ID token
-        id_info = id_token.verify_oauth2_token(
-            token, 
-            requests.Request(), 
-            settings.GOOGLE_CLIENT_ID
-        )
-        
-        # Check if user exists
-        email = id_info['email']
-        user, created = CustomUser.objects.get_or_create(
-            email=email,
-            defaults={
-                'username': id_info.get('name'),
-                'is_active': True
+    def get_queryset(self):
+        return self.queryset.filter(user=self.request.user).order_by("id")
+    
+class RetrieveUpdateUserProfileView(RetrieveUpdateDestroyAPIView):
+    queryset = UserProfile.objects.all()
+    lookup_field = "id"
+    serializer_class = UserProfileSerializer
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+    
+    # def get_object(self):
+    #     return self.request.user
+    
+    def get_queryset(self):
+        return self.queryset.filter(user=self.request.user).order_by("id")
+class ForgotPasswordView(GenericAPIView):
+    serializer_class = EmailSerializer
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        """
+        Create token and send reset password email.
+        """
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data["email"]
+        user = CustomUser.objects.filter(email=email).first()
+        if user:
+            encoded_pk = urlsafe_base64_encode(force_bytes(user.pk))
+            token = PasswordResetTokenGenerator().make_token(user)
+           
+            # Construct the frontend reset URL
+            reset_url = f"http://localhost:5173/reset-password/{encoded_pk}/{token}/"
+
+            # Create the message as a string
+            context = {
+                'user': user,
+                'reset_url': reset_url,
             }
-        )
-        
-        # Create profile if new user
-        if created:
-            UserProfile.objects.create(
-                user=user,
-                display_name=id_info.get('name', email.split('@')[0])
+
+            # Use the 'password_reset.html' template
+            subject = "Password Reset Request"
+            template_path = "forgot_password/password_reset.html"
+            send_notification(user, subject, template_path, context)
+            
+            return redirect(reset_url)
+            
+        else:
+            return Response(
+                {"message": "User does not exist."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        
-        # Login user
-        login(request, user)
-        
-        # Generate tokens
-        refresh = RefreshToken.for_user(user)
-        return Response({
-            'user': UserSerializer(user).data,
-            'refresh': str(refresh),
-            'access': str(refresh.access_token),
-            'created': created
-        })
-    
-    except ValueError:
-        return Response({'error': 'Invalid Google token'}, status=status.HTTP_401_UNAUTHORIZED)
 
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def forgot_password(request):
-    email = request.data.get('email')
-    
-    try:
-        user = CustomUser.objects.get(email=email)
+class ResetPasswordView(GenericAPIView):
+    """
+    Verify and Reset Password Token View.
+    """
+    permission_classes = [AllowAny]
+    serializer_class = ResetPasswordSerializer
+
+    def patch(self, request, *args, **kwargs):
+        """
+        Verify token & uidb64 and then reset the password.
+        """
+        uidb64 = self.kwargs.get('uidb64')
+        token = self.kwargs.get('token')
         
-        # Generate password reset token
-        token = default_token_generator.make_token(user)
-        reset_url = f"{settings.FRONTEND_URL}/reset-password?token={token}&email={email}"
+        print(uidb64, token)
+
+        if not uidb64 or not token:
+            return Response(
+                {"message": "Missing uidb64 or token."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Deserialize password data
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        password = serializer.validated_data['password']
+
+        # Decode the uidb64 to get the user
+        try:
+            user_id = force_str(urlsafe_base64_decode(uidb64))
+            user = CustomUser.objects.get(id=user_id)
+        except (TypeError, ValueError, OverflowError, CustomUser.DoesNotExist):
+            return Response(
+                {"message": "Invalid token or user ID."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Verify the token
+        if not PasswordResetTokenGenerator().check_token(user, token):
+            return Response(
+                {"message": "Invalid token or expired."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Reset the password
+        user.set_password(password)
+        user.save()
         
-        # Send password reset email
-        send_mail(
-            'Password Reset Request',
-            f'Click the following link to reset your password: {reset_url}',
-            settings.DEFAULT_FROM_EMAIL,
-            [email],
-            fail_silently=False,
+        # Send a success email
+        subject = "Password Reset Successful"
+        template_path = "forgot_password/reset_success.html"
+        context = {"user": user}
+        send_notification(user, subject, template_path, context)
+
+
+        return Response(
+            {"message": "Password reset successful."},
+            status=status.HTTP_200_OK,
         )
-        
-        return Response({'message': 'Password reset link sent'}, status=status.HTTP_200_OK)
-    
-    except CustomUser.DoesNotExist:
-        return Response({'error': 'Email not found'}, status=status.HTTP_404_NOT_FOUND)
+      
 
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def reset_password(request):
-    email = request.data.get('email')
-    token = request.data.get('token')
-    new_password = request.data.get('new_password')
-    
-    try:
-        user = CustomUser.objects.get(email=email)
-        
-        # Verify token
-        if default_token_generator.check_token(user, token):
-            user.set_password(new_password)
+class EmailVerificationView(APIView):
+    permission_classes = [AllowAny]
+    def get(self, request, uidb64, token, *args, **kwargs):
+        try:
+            uid = force_str(urlsafe_base64_decode(uidb64))
+            user = CustomUser.objects.get(pk=uid)
+        except (TypeError, ValueError, OverflowError, CustomUser.DoesNotExist):
+            user = None
+
+        if user is not None and PasswordResetTokenGenerator().check_token(user, token):
+            user.is_verified = True
             user.save()
-            return Response({'message': 'Password reset successful'}, status=status.HTTP_200_OK)
+            
+            
+            # Construct the redirect URL with a success message
+            redirect_url = f"http://localhost:5173/login?account_verified=True"
+            
+            context = {
+                "user": user,
+                "redirect_url": redirect_url,
+            }
+             # Send confirmation email
+            template_path = "Account_verify/verification_success.html"
+            subject = "Account Activated"
+            send_notification(user, subject, template_path, context)
+
+
+            # Redirect the user to the frontend login page
+            return redirect(redirect_url)
+
+           
+            # return Response({"message": "Account activated successfully"}, status=status.HTTP_200_OK)
+        else:
+            return Response({"message": "Activation link is invalid"}, status=status.HTTP_400_BAD_REQUEST)
         
-        return Response({'error': 'Invalid or expired token'}, status=status.HTTP_400_BAD_REQUEST)
+class ResendVerificationEmailView(GenericAPIView):
+    serializer_class = ResendVerificationEmailSerializer
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()  # This will trigger the email sending logic
+        return Response({"message": "Verification link has been sent to your email."}, status=status.HTTP_200_OK)
     
-    except CustomUser.DoesNotExist:
-        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -202,9 +309,3 @@ def follow_user(request):
     except CustomUser.DoesNotExist:
         return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def get_user_profile(request):
-    profile = request.user.profile
-    serializer = UserProfileSerializer(profile)
-    return Response(serializer.data)
