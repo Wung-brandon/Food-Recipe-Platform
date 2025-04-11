@@ -22,7 +22,7 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         token["bio"] = user.profile.bio
         token["followers_count"] = user.profile.followers_count
         token["following_count"] = user.profile.following_count
-        token["profile_img"] = str(user.profile.profile_img)
+        token["profile_picture"] = str(user.profile.profile_picture)
         return token
 
 class UserSerializer(serializers.ModelSerializer):

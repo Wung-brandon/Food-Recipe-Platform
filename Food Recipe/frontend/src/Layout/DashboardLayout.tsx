@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import ProtectedRoute from '../utils/PrivateRoute';
 import { ThemeProvider, useThemeBackground } from '../context/BackgroundContext';
 import { 
   Dashboard as DashboardIcon, 
@@ -85,19 +86,27 @@ const Sidebar: React.FC = () => {
   const { logout, getUserProfile, user } = useAuth();
 
   // Fetch user profile on component mount
+  // Fetch user profile on component mount
   useEffect(() => {
     const fetchUserProfile = async () => {
       try {
-        const profileData = await getUserProfile();
-        setUserProfile(profileData);
-        console.log("profile data", profileData)
+        // Convert string ID to number
+        const userId = user?.id ? parseInt(user.id, 10) : 0;
+        
+        if (userId) {
+          const profileData = await getUserProfile(userId);
+          console.log("User Profile Data:", profileData);
+          setUserProfile(profileData);
+        }
       } catch (error) {
         console.error("Failed to fetch user profile:", error);
       }
     };
     
-    fetchUserProfile();
-  }, [getUserProfile]);
+    if (user?.id) {
+      fetchUserProfile();
+    }
+  }, [getUserProfile, user]);
 
   const toggleSidebar = () => {
     setIsExpanded(!isExpanded);
@@ -291,7 +300,9 @@ const DashboardLayout: React.FC = () => {
 // Wrapped Dashboard Layout with Theme Provider
 const DashboardLayoutWrapper: React.FC = () => (
   <ThemeProvider>
-    <DashboardLayout />
+    {/* <ProtectedRoute> */}
+      <DashboardLayout />
+    {/* </ProtectedRoute> */}
   </ThemeProvider>
 );
 

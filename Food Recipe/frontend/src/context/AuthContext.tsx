@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
@@ -11,6 +12,16 @@ interface User {
   username?: string;
 }
 
+interface UserProfile {
+  full_name: string;
+  bio?: string;
+  email: string;
+  username: string;
+  is_verified: boolean;
+  followers_count: number;
+  following_count: number;
+  profile_picture?: string;
+}
 interface AuthContextType {
   user: User | null;
   token: string | null;
@@ -21,16 +32,8 @@ interface AuthContextType {
   forgotPassword: (email: string) => Promise<void>;
   resetPassword: (email: string, token: string, newPassword: string) => Promise<void>;
   followUser: (userId: string) => Promise<void>;
-  getUserProfile: () => Promise<UserProfile>;
+  getUserProfile: (id: number) => Promise<UserProfile>;
   isAuthenticated: boolean;
-}
-
-interface UserProfile {
-  full_name: string;
-  bio?: string;
-  followers_count: number;
-  following_count: number;
-  profile_picture?: string;
 }
 
 // Create context
@@ -48,16 +51,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Check for existing token on initial load
   useEffect(() => {
     const storedToken = localStorage.getItem('access_token');
-    if (storedToken) {
+    const storedUser = localStorage.getItem('user');
+  
+    if (storedToken && storedUser) {
       try {
         const decoded = jwtDecode<User>(storedToken);
-        setUser(decoded);
+        console.log("Decoded token:", decoded);
+        setUser(JSON.parse(storedUser)); // Parse the stored user object
         setToken(storedToken);
         setIsAuthenticated(true);
-      } catch (error:any) {
+      } catch (error) {
         // Invalid token, clear storage
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
+        localStorage.removeItem('user');
       }
     }
   }, []);
@@ -65,35 +72,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Login function
   const login = async (email: string, password: string) => {
     try {
-        const response = await axios.post(`${BaseUrl}api/auth/login/`, 
-            { email, password },
-            { headers: { "Content-Type": "application/json" } }
-        );
-        
-        const { access, refresh, user: userData } = response.data;
-
-        // Store tokens
-        localStorage.setItem('access_token', access);
-        localStorage.setItem('refresh_token', refresh);
-
-        // Set user and authentication state
-        setUser(userData);
-        setToken(access);
-        setIsAuthenticated(true);
-        
-        // Navigate first, then show toast
-        navigate("/dashboard");
-        setTimeout(() => {
-            toast.success("Login Successful");
-        }, 100);
+      const response = await axios.post(`${BaseUrl}api/auth/token/`, 
+        { email, password },
+        { headers: { "Content-Type": "application/json" } }
+      );
+  
+      const { access, refresh, user: userData } = response.data;
+  
+      // Store tokens and user in local storage
+      localStorage.setItem('access_token', access);
+      localStorage.setItem('refresh_token', refresh);
+      localStorage.setItem('user', JSON.stringify(userData));
+  
+      // Set user and authentication state
+      setUser(userData);
+      setToken(access);
+      setIsAuthenticated(true);
+  
+      navigate("/dashboard");
+      toast.success("Login Successful");
     } catch (error: any) {
-        // Check for specific error responses
-        if (error.response?.status === 401 || error.response?.status === 400) {
-            toast.error("Invalid credentials");
-        } else {
-            toast.error("Login failed. Please try again.");
-        }
-        // Don't throw an error here, as it might be causing cascade issues
+      if (error.response?.status === 401 || error.response?.status === 400) {
+        toast.error("Invalid credentials");
+      } else {
+        toast.error("Login failed. Please try again.");
+      }
     }
 };
 
@@ -112,13 +115,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(userData);
       setToken(access);
       setIsAuthenticated(true);
-    } catch (error:any) {
+    } catch {
       throw new Error('Google login failed');
     }
   };
 
   // Register function
-  const register = async (username: string, email: string, password: string, confirm_password: string ) => {
+  const register = async (email: string, password: string, confirm_password: string, username?: string) => {
     console.log("Sending registration data:", { username, email, password, confirm_password });
 
     try {
@@ -184,16 +187,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Logout function
   const logout = () => {
-    // Clear tokens from storage
+    // Clear tokens and user from storage
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
-
+    localStorage.removeItem('user');
+  
     // Reset state
     setUser(null);
     setToken(null);
     setIsAuthenticated(false);
-    navigate("/login")
-    toast.success("Logout Successful")
+    navigate("/login");
+    toast.success("Logout Successful");
   };
 
   // Forgot Password
@@ -201,10 +205,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await axios.post(`${BaseUrl}api/auth/forgot-password/`, { email });
       toast.success('Reset Password link has been sent to your email');
-    } catch (error:any) {
+    } catch {
       toast.error('Failed to send password reset link');
       throw new Error('Failed to send password reset link');
-
     }
   };
 
@@ -218,9 +221,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       toast.success('Password reset successful! You can now log in with your new password.');
       navigate('/login'); // Navigate to login page after successful reset
-    } catch (error:any) {
+    } catch {
       toast.error('Failed to reset password.');
       throw new Error('Failed to reset password');
+    }
+  };
+
+  // Get User Profile
+  const getUserProfile = async (id: number): Promise<UserProfile> => {
+    try {
+      const response = await axios.get(`${BaseUrl}user/profile/${id}/`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      return response.data;
+    } catch {
+      throw new Error('Failed to fetch user profile');
     }
   };
 
@@ -230,18 +245,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const response = await axios.post(`${BaseUrl}api/auth/follow-user/`, { user_id: userId });
       return response.data;
 
-    } catch (error:any) {
+    } catch {
       throw new Error('Failed to follow user');
-    }
-  };
-
-  // Get User Profile
-  const getUserProfile = async (): Promise<UserProfile> => {
-    try {
-      const response = await axios.get(`${BaseUrl}api/auth/user-profile/`);
-      return response.data;
-    } catch (error:any) {
-      throw new Error('Failed to fetch user profile');
     }
   };
 
@@ -259,6 +264,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           try {
             const refreshToken = localStorage.getItem('refresh_token');
             const response = await axios.post(`${BaseUrl}api/token/refresh/`, { refresh: refreshToken });
+            toast.success("Token refreshed successfully");
             
             const { access } = response.data;
             localStorage.setItem('access_token', access);
@@ -293,8 +299,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     logout,
     forgotPassword,
     resetPassword,
-    followUser,
     getUserProfile,
+    followUser,
     isAuthenticated
   };
 
