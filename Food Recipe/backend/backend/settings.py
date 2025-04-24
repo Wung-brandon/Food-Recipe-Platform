@@ -41,7 +41,9 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    
     "authentication.apps.AuthenticationConfig",
+    "recipe.apps.RecipeConfig",
     
     "rest_framework",
     "corsheaders",
