@@ -1,10 +1,12 @@
 import './App.css'
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Outlet } from 'react-router-dom'
 import { 
   Home,
   About,
   ContactUs,
-  AuthPage,
+  SignupPage,
+  LoginPage,
   ResetPassword,
   ForgotPassword,
   ShopPage,
@@ -32,6 +34,9 @@ import DashboardLayout from './Layout/DashboardLayout'
 import { ToastContainer } from 'react-toastify';
 import { AuthProvider } from './context/AuthContext'
 // import 'bootstrap/dist/css/bootstrap.min.css';
+
+import ChefDashboard from './pages/Dashboard/ChefDashboard/ChefDashboard';
+import UserDashboard from './pages/Dashboard/UserDashboard/UserDashboard';
 function App() {
     return (
       <>
@@ -39,6 +44,8 @@ function App() {
           <AuthProvider>
             <ToastContainer />
             <Routes>
+              <Route path='/signup' element={<SignupPage />} />
+              <Route path='/login' element={<LoginPage />} />
               {/* Routes with Main Navbar and Footer */}
               <Route
                 element={
@@ -53,8 +60,7 @@ function App() {
                 <Route path='*' element={<NotFoundPage />} />
                 <Route path='/about' element={<About />} />
                 <Route path='/contact' element={<ContactUs />} />
-                <Route path='/signup' element={<AuthPage />} />
-                <Route path='/login' element={<AuthPage />} />
+                
                 <Route path='/forgot-password' element={<ForgotPassword />} />
                 <Route path='/reset-password' element={<ResetPassword />} />
                 <Route path='/shop' element={<ShopPage />} />
@@ -67,15 +73,9 @@ function App() {
               </Route>
     
               {/* Dashboard Routes without Main Navbar and Footer */}
-              <Route
-                path='/dashboard'
-                element={
-                  <>
-                    {/* <DashboardNavbar /> */}
-                    <DashboardLayout />
-                  </>
-                }
-              >
+              
+                <Route path='/dashboard/chef' element={<ChefDashboard />}/>
+                <Route path='/dashboard/user' element={<UserDashboard />}/>
                 <Route index element={<DashboardPage />} />
                 <Route path='favorites' element={<FavoritesPage />} />
                 <Route path='messages' element={<MessagesPage />} />
@@ -84,7 +84,7 @@ function App() {
                 <Route path='meal-planner' element={<MealPlannerPage />} />
                 <Route path='recipes' element={<RecipesPage />} />
                 <Route path='profile' element={<ProfilePage />} />
-              </Route>
+              
             </Routes>
           </AuthProvider>
         </Router>

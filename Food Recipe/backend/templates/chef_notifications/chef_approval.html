@@ -1,0 +1,76 @@
+<!-- templates/Chef_notifications/chef_approval.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Chef Account Approved!</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            border-radius: 5px 5px 0 0;
+        }
+        .content {
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 5px 5px;
+        }
+        .button {
+            display: inline-block;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        .footer {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #777;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Congratulations, Chef!</h1>
+    </div>
+    <div class="content">
+        <p>Hello {{ user.username }},</p>
+        
+        <p>Great news! Your chef application has been approved! 🎉</p>
+        
+        <p>Our team has reviewed your credentials and we're excited to welcome you to our platform as a verified chef. You can now:</p>
+        
+        <ul>
+            <li>Create and publish new recipes</li>
+            <li>Build your chef profile with your specialties</li>
+            <li>Interact with users and receive feedback</li>
+            <li>Showcase your culinary expertise to our community</li>
+        </ul>
+        
+        <p>Your expertise in {{ chef_profile.specialization|lower }} cuisine will be a valuable addition to our platform.</p>
+        
+        <a href="{{ login_url }}" class="button">Login to Your Account</a>
+        
+        <p>If you have any questions or need assistance, please don't hesitate to contact our support team.</p>
+        
+        <p>Happy cooking!</p>
+    </div>
+    <div class="footer">
+        <p>&copy; 2025 PerfectRecipe. All rights reserved.</p>
+    </div>
+</body>
+</html>

@@ -1,0 +1,81 @@
+<!-- templates/Chef_notifications/chef_verification_email.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Chef Account Verification</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: #d97706;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            border-radius: 5px 5px 0 0;
+        }
+        .content {
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 5px 5px;
+        }
+        .button {
+            display: inline-block;
+            background-color: #d97706;
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        .footer {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #777;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Chef Account Verification</h1>
+    </div>
+    <div class="content">
+        <p>Hello {{ user.username }},</p>
+        
+        <p>Thank you for registering as a chef on our platform! Your account has been created successfully.</p>
+        
+        <p><strong>Important Information:</strong></p>
+        
+        <ol>
+            <li>Please verify your email address by clicking the button below.</li>
+            <li>After email verification, your chef profile will be reviewed by our team.</li>
+            <li>The verification process typically takes 1-2 business days.</li>
+            <li>Once approved, you'll be able to publish recipes and interact with users on our platform.</li>
+        </ol>
+        
+        <p>We're excited to have you as part of our chef community!</p>
+        
+        <a href="{{ verification_link }}" class="button">Verify Your Email</a>
+        
+        <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+        <p>{{ verification_link }}</p>
+        
+        <p>If you did not sign up for a chef account, please ignore this email.</p>
+    </div>
+    <div class="footer">
+        <p>&copy; 2025 PerfectRecipe. All rights reserved.</p>
+    </div>
+</body>
+</html>
+
+
+
+

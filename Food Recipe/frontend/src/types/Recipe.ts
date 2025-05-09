@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-interface RecipeData {
+export interface RecipeData {
     id?: number;
     title: string;
     category: string;
@@ -19,5 +19,41 @@ interface RecipeData {
     createdAt?: string; // Optional if it's not always present
   }
   
-  export default RecipeData;
+  interface Author {
+    id: string;
+    name: string;
+    avatar: string;
+  }
   
+  interface Ingredient {
+    id: string;
+    name: string;
+    amount: string;
+    checked: boolean;
+  }
+  
+  interface Step {
+    id: string;
+    description: string;
+  }
+export interface Recipe {
+    id: string;
+    title: string;
+    imageFile?: File | null; // Added imageFile property
+    description: string;
+    image: string;
+    preparationTime: number;
+    cookingTime: number;
+    servings: number;
+    difficulty: string;
+    calories: number;
+    rating: number;
+    ratingCount: number;
+    author: Author;
+    ingredients: Ingredient[];
+    steps: Step[];
+    tips: string[];
+    isFavorite: boolean;
+    category: string;
+    tags: string[];
+  }

@@ -1,20 +1,24 @@
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.tokens import default_token_generator
 from rest_framework_simplejwt.views import TokenObtainPairView
-from .serializers import ( MyTokenObtainPairSerializer, 
-                           UserProfileSerializer, 
-                           SignUpSerializer, 
-                           EmailSerializer, 
-                           UserSerializer, 
-                           ResetPasswordSerializer,
-                           UserFollowingSerializer,
-                           EmailVerificationSerializer,
-                           ResendVerificationEmailSerializer
-                        )
-from rest_framework.generics import RetrieveAPIView, ListCreateAPIView, RetrieveUpdateDestroyAPIView
+from .serializers import (
+    MyTokenObtainPairSerializer, 
+    UserProfileSerializer, 
+    SignUpSerializer, 
+    EmailSerializer, 
+    UserSerializer, 
+    ResetPasswordSerializer,
+    UserFollowingSerializer,
+    EmailVerificationSerializer,
+    ResendVerificationEmailSerializer,
+    ChefSignUpSerializer,
+    ChefProfileSerializer,
+    ChefProfileDetailSerializer
+)
+from rest_framework.generics import RetrieveAPIView, ListCreateAPIView, RetrieveUpdateDestroyAPIView, ListAPIView
 from rest_framework.views import APIView
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated, BasePermission
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.generics import GenericAPIView
@@ -24,19 +28,36 @@ from django.urls import reverse
 from django.shortcuts import redirect
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode 
+from django.utils import timezone
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from .utils import send_notification
 from django.conf import settings
 from rest_framework.parsers import FormParser, MultiPartParser
 import logging
-# from google.oauth2 import id_token
-# from google.auth.transport import requests
 
-from .models import CustomUser, UserProfile, UserFollowing
+from .models import CustomUser, UserProfile, UserFollowing, ChefProfile
 
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+# Custom permissions
+class IsChef(BasePermission):
+    """
+    Permission to only allow chefs to access the view.
+    """
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.role == 'CHEF'
+
+class IsVerifiedChef(BasePermission):
+    """
+    Permission to only allow verified chefs to access the view.
+    """
+    def has_permission(self, request, view):
+        return (request.user.is_authenticated and 
+                request.user.role == 'CHEF' and 
+                hasattr(request.user, 'chef_profile') and 
+                request.user.chef_profile.verification_status == 'VERIFIED')
 
 class MyTokenObtainPairView(TokenObtainPairView):
     serializer_class = MyTokenObtainPairSerializer
@@ -50,12 +71,10 @@ class SignUpView(GenericAPIView):
         logger.info("Signup request received")
         if serializer.is_valid():
             logger.info("User data is valid, saving user...")
-            serializer.save()
+            user = serializer.save()
 
             try:
                 # Generate verification token and link
-                user_data = serializer.data
-                user = User.objects.get(email=user_data["email"])
                 uid = urlsafe_base64_encode(force_bytes(user.pk))
                 token = PasswordResetTokenGenerator().make_token(user)
                 verification_link = request.build_absolute_uri(
@@ -63,8 +82,8 @@ class SignUpView(GenericAPIView):
                 )
                 
                 context = {
-                    "user" : user,
-                    "verification_link" : verification_link
+                    "user": user,
+                    "verification_link": verification_link
                 }
 
                 # Create the message as a string
@@ -87,10 +106,76 @@ class SignUpView(GenericAPIView):
                 )
             
         return Response(
-                {"message": "Something went wrong."},
+                serializer.errors,
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+class ChefSignUpView(GenericAPIView):
+    serializer_class = ChefSignUpSerializer
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+    
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            chef_profile = serializer.save()
+            user = chef_profile.user
             
+            try:
+                # Generate verification token and link
+                uid = urlsafe_base64_encode(force_bytes(user.pk))
+                token = PasswordResetTokenGenerator().make_token(user)
+                verification_link = request.build_absolute_uri(
+                    reverse('verify-email', kwargs={'uidb64': uid, 'token': token})
+                )
+                
+                context = {
+                    "user": user,
+                    "verification_link": verification_link,
+                    "chef_application": True  # Flag for chef-specific email template
+                }
+
+                # Create the message as a string
+                template_path = "Account_verify/chef_verification_email.html"
+                subject = "Verify your Chef Account"
+
+                # Send verification email
+                send_notification(user, subject, template_path, context)
+                
+                # Notify admins about new chef application
+                admin_users = CustomUser.objects.filter(is_staff=True)
+                for admin in admin_users:
+                    admin_context = {
+                        "admin": admin,
+                        "chef": user,
+                        "chef_profile": chef_profile,
+                        "admin_link": request.build_absolute_uri(f'/admin/app/chefprofile/{chef_profile.id}/change/')
+                    }
+                    
+                    admin_template_path = "Chef_notifications/new_chef_application.html"
+                    admin_subject = f"New Chef Application: {user.username}"
+                    send_notification(admin, admin_subject, admin_template_path, admin_context)
+
+                return Response(
+                    {
+                        "message": "Chef registration successful. Your application is under review. Please check your email to verify your account.",
+                        "chef_id": chef_profile.id
+                    },
+                    status=status.HTTP_201_CREATED
+                )
+             
+            except Exception as e:
+                logger.error(f"Error in chef signup: {e}")
+                return Response(
+                    {"message": f"Registration failed: {str(e)}"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
+        return Response(
+                serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
 class GetUserView(RetrieveAPIView):
     queryset = CustomUser.objects.all()
     serializer_class = UserSerializer
@@ -102,7 +187,14 @@ class GetUserView(RetrieveAPIView):
     def get(self, request, *args, **kwargs):
         user = self.get_object()
         serializer = self.get_serializer(user)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        data = serializer.data
+        
+        # Add chef profile data if the user is a chef
+        if user.role == 'CHEF' and hasattr(user, 'chef_profile'):
+            chef_serializer = ChefProfileSerializer(user.chef_profile)
+            data['chef_profile'] = chef_serializer.data
+            
+        return Response(data, status=status.HTTP_200_OK)
 
 class ListCreateUserProfileView(ListCreateAPIView):
     queryset = UserProfile.objects.all()
@@ -124,11 +216,62 @@ class RetrieveUpdateUserProfileView(RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
     
-    # def get_object(self):
-    #     return self.request.user
-    
     def get_queryset(self):
         return self.queryset.filter(user=self.request.user).order_by("id")
+
+class RetrieveUpdateChefProfileView(RetrieveUpdateDestroyAPIView):
+    queryset = ChefProfile.objects.all()
+    lookup_field = "id"
+    serializer_class = ChefProfileSerializer
+    permission_classes = [IsAuthenticated, IsChef]
+    parser_classes = [MultiPartParser, FormParser]
+    
+    def get_queryset(self):
+        return self.queryset.filter(user=self.request.user)
+    
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        
+        # If the chef is already verified, limit which fields can be updated
+        if instance.verification_status == 'VERIFIED':
+            allowed_fields = ['years_of_experience', 'specialization']
+            for field in list(request.data.keys()):
+                if field not in allowed_fields:
+                    request.data.pop(field, None)
+                    
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        
+        # If updating chef profile resets verification status
+        if instance.verification_status == 'VERIFIED' and any(field in request.data for field in ['certification', 'certification_number']):
+            instance.verification_status = 'PENDING'
+            instance.save()
+            
+            # Notify admins about updated chef profile
+            admin_users = CustomUser.objects.filter(is_staff=True)
+            for admin in admin_users:
+                admin_context = {
+                    "admin": admin,
+                    "chef": instance.user,
+                    "chef_profile": instance,
+                    "admin_link": request.build_absolute_uri(f'/admin/app/chefprofile/{instance.id}/change/')
+                }
+                
+                admin_template_path = "Chef_notifications/chef_profile_updated.html"
+                admin_subject = f"Chef Profile Updated: {instance.user.username}"
+                send_notification(admin, admin_subject, admin_template_path, admin_context)
+        
+        return Response(serializer.data)
+
+class ListAllVerifiedChefsView(ListAPIView):
+    """API endpoint to get all verified chefs"""
+    serializer_class = ChefProfileDetailSerializer
+    permission_classes = [AllowAny]
+    
+    def get_queryset(self):
+        return ChefProfile.objects.filter(verification_status='VERIFIED')
+
 class ForgotPasswordView(GenericAPIView):
     serializer_class = EmailSerializer
     permission_classes = [AllowAny]
@@ -223,11 +366,8 @@ class ResetPasswordView(GenericAPIView):
 
 
         return Response(
-            {"message": "Password reset successful."},
-            status=status.HTTP_200_OK,
-        )
-      
-
+            {"message": "Password reset successful."},)
+        
 class EmailVerificationView(APIView):
     permission_classes = [AllowAny]
     def get(self, request, uidb64, token, *args, **kwargs):
@@ -241,7 +381,6 @@ class EmailVerificationView(APIView):
             user.is_verified = True
             user.save()
             
-            
             # Construct the redirect URL with a success message
             redirect_url = f"http://localhost:5173/login?account_verified=True"
             
@@ -253,13 +392,28 @@ class EmailVerificationView(APIView):
             template_path = "Account_verify/verification_success.html"
             subject = "Account Activated"
             send_notification(user, subject, template_path, context)
-
+            
+            # If the user is a chef, add a message about verification pending
+            if user.role == 'CHEF':
+                if hasattr(user, 'chef_profile'):
+                    redirect_url = f"http://localhost:5173/login?account_verified=True&chef_verification_pending=True"
+                
+                # Notify admins about new verified chef account
+                admin_users = CustomUser.objects.filter(is_staff=True)
+                for admin in admin_users:
+                    admin_context = {
+                        "admin": admin,
+                        "chef": user,
+                        "chef_profile": user.chef_profile,
+                        "admin_link": request.build_absolute_uri(f'/admin/app/chefprofile/{user.chef_profile.id}/change/')
+                    }
+                    
+                    admin_template_path = "Chef_notifications/chef_email_verified.html"
+                    admin_subject = f"Chef Email Verified: {user.username}"
+                    send_notification(admin, admin_subject, admin_template_path, admin_context)
 
             # Redirect the user to the frontend login page
             return redirect(redirect_url)
-
-           
-            # return Response({"message": "Account activated successfully"}, status=status.HTTP_200_OK)
         else:
             return Response({"message": "Activation link is invalid"}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -273,7 +427,6 @@ class ResendVerificationEmailView(GenericAPIView):
         serializer.save()  # This will trigger the email sending logic
         return Response({"message": "Verification link has been sent to your email."}, status=status.HTTP_200_OK)
     
-
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def follow_user(request):
@@ -309,3 +462,101 @@ def follow_user(request):
     except CustomUser.DoesNotExist:
         return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
+# Chef verification admin endpoints
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def approve_chef(request, chef_id):
+    """Admin endpoint to approve a chef application"""
+    if not request.user.is_staff:
+        return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        chef_profile = ChefProfile.objects.get(id=chef_id)
+        
+        # Update chef verification status
+        chef_profile.verification_status = 'VERIFIED'
+        chef_profile.verification_date = timezone.now()
+        chef_profile.save()
+        
+        # Send approval notification to chef
+        user = chef_profile.user
+        context = {
+            "user": user,
+            "chef_profile": chef_profile,
+            "login_url": request.build_absolute_uri('/login')
+        }
+        
+        template_path = "Chef_notifications/chef_approval.html"
+        subject = "Your Chef Account Has Been Approved!"
+        send_notification(user, subject, template_path, context)
+        
+        return Response({
+            'message': 'Chef approved successfully',
+            'chef_id': chef_profile.id
+        }, status=status.HTTP_200_OK)
+        
+    except ChefProfile.DoesNotExist:
+        return Response({'error': 'Chef not found'}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def reject_chef(request, chef_id):
+    """Admin endpoint to reject a chef application"""
+    if not request.user.is_staff:
+        return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+    
+    rejection_reason = request.data.get('rejection_reason')
+    if not rejection_reason:
+        return Response({'error': 'Rejection reason is required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        chef_profile = ChefProfile.objects.get(id=chef_id)
+        
+        # Update chef verification status
+        chef_profile.verification_status = 'REJECTED'
+        chef_profile.rejection_reason = rejection_reason
+        chef_profile.save()
+        
+        # Send rejection notification to chef
+        user = chef_profile.user
+        context = {
+            "user": user,
+            "chef_profile": chef_profile,
+            "rejection_reason": rejection_reason,
+            "update_url": request.build_absolute_uri('/chef/profile')
+        }
+        
+        template_path = "Chef_notifications/chef_rejection.html"
+        subject = "Your Chef Application Status"
+        send_notification(user, subject, template_path, context)
+        
+        return Response({
+            'message': 'Chef application rejected',
+            'chef_id': chef_profile.id
+        }, status=status.HTTP_200_OK)
+        
+    except ChefProfile.DoesNotExist:
+        return Response({'error': 'Chef not found'}, status=status.HTTP_404_NOT_FOUND)
+
+# List all pending chef applications
+class PendingChefApplicationsView(ListAPIView):
+    """Admin endpoint to list all pending chef applications"""
+    serializer_class = ChefProfileDetailSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        if not self.request.user.is_staff:
+            return ChefProfile.objects.none()
+        return ChefProfile.objects.filter(verification_status='PENDING')
+
+# Chef verification status check
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsChef])
+def check_chef_status(request):
+    """Endpoint for chefs to check their verification status"""
+    try:
+        chef_profile = ChefProfile.objects.get(user=request.user)
+        serializer = ChefProfileSerializer(chef_profile)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except ChefProfile.DoesNotExist:
+        return Response({'error': 'Chef profile not found'}, status=status.HTTP_404_NOT_FOUND)

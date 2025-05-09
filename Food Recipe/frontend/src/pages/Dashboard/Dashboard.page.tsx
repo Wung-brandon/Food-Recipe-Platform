@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Favorite as FavoriteIcon,
@@ -15,6 +15,8 @@ import {
   LinearProgress, 
   Button 
 } from '@mui/material';
+import { RecipeForm } from '../../components/RecipeForm';
+import { Recipe } from '../../types/Recipe';
 
 // Static Data for Enhanced Dashboard
 const staticUserData = {
@@ -79,6 +81,13 @@ const orderHistory = [
 ];
 
 const DashboardPage: React.FC = () => {
+  const [openRecipeForm, setOpenRecipeForm] = useState(false);
+  // Handle saving a new recipe
+  const handleSaveRecipe = (recipe: Recipe) => {
+    console.log('New recipe created:', recipe);
+    // Here you would typically save the recipe to your database
+    // and update your UI as needed
+  };
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -247,6 +256,8 @@ const DashboardPage: React.FC = () => {
                 variant="contained" 
                 fullWidth 
                 className="bg-amber-600 hover:bg-amber-700"
+                onClick={() => setOpenRecipeForm(true)} // Open recipe form modal
+
               >
                 Create New Recipe
               </Button>
@@ -268,6 +279,12 @@ const DashboardPage: React.FC = () => {
           </CardContent>
         </Card>
       </motion.div>
+      {/* Recipe Form Modal */}
+      <RecipeForm
+        open={openRecipeForm}
+        onClose={() => setOpenRecipeForm(false)}
+        onSave={handleSaveRecipe}
+      />
     </div>
   );
 };

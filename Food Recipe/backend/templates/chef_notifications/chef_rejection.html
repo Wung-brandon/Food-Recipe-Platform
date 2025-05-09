@@ -1,0 +1,86 @@
+<!-- templates/Chef_notifications/chef_rejection.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Chef Application Status</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: #f44336;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            border-radius: 5px 5px 0 0;
+        }
+        .content {
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 5px 5px;
+        }
+        .reason {
+            background-color: #f9f9f9;
+            padding: 15px;
+            border-left: 4px solid #f44336;
+            margin: 20px 0;
+        }
+        .button {
+            display: inline-block;
+            background-color: #2196F3;
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        .footer {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #777;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Chef Application Status</h1>
+    </div>
+    <div class="content">
+        <p>Hello {{ user.username }},</p>
+        
+        <p>Thank you for your interest in joining our platform as a chef. We have reviewed your application and unfortunately, we are unable to approve it at this time.</p>
+        
+        <div class="reason">
+            <p><strong>Reason:</strong></p>
+            <p>{{ rejection_reason }}</p>
+        </div>
+        
+        <p>You are welcome to update your application and resubmit it. Please address the concerns mentioned above to increase your chances of approval.</p>
+        
+        <p>Here are some tips for a successful application:</p>
+        <ul>
+            <li>Ensure all documentation is clear and legible</li>
+            <li>Provide valid certification information that can be verified</li>
+            <li>Complete all required fields with accurate information</li>
+            <li>Include relevant professional experience in your profile</li>
+        </ul>
+        
+        <a href="{{ update_url }}" class="button">Update Your Application</a>
+        
+        <p>If you have any questions or need assistance, please contact our support team.</p>
+        
+        <p>We appreciate your understanding.</p>
+    </div>
+    <div class="footer">
+        <p>&copy; 2025 PerfectRecipe. All rights reserved.</p>
+    </div>
+</body>
+</html>

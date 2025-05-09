@@ -115,7 +115,7 @@ def send_notification(user, subject, template_path, context):
 
         # Create a multipart message
             msg = MIMEMultipart()
-            msg["From"] = "expenseeye24@gmail.com"
+            msg["From"] = sender_email
             msg["To"] = receiver_email
             msg["Subject"] = subject
 
@@ -128,12 +128,12 @@ def send_notification(user, subject, template_path, context):
             
 
             # Connect to the SMTP server
-            server = smtplib.SMTP("smtp.gmail.com", 587)
+            server = smtplib.SMTP(send_host, send_port)
             server.ehlo()
             server.starttls()
 
             # Login to the SMTP server
-            server.login(sender_email, "gmat vpzx cely ewdm")
+            server.login(sender_email, sender_password)
 
             # Send the email
             server.sendmail(sender_email, receiver_email, msg.as_string())

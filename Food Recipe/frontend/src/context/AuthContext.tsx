@@ -10,6 +10,7 @@ interface User {
   id: string;
   email: string;
   username?: string;
+  role?: 'user' | 'chef' | 'admin'; // Add role field
 }
 
 interface UserProfile {
@@ -22,18 +23,29 @@ interface UserProfile {
   following_count: number;
   profile_picture?: string;
 }
+
+interface ChefProfile extends UserProfile {
+  specialty?: string;
+  experience?: string;
+  verification_status: 'pending' | 'approved' | 'rejected';
+}
+
 interface AuthContextType {
   user: User | null;
   token: string | null;
   login: (email: string, password: string) => Promise<void>;
   googleLogin: (token: string) => Promise<void>;
-  register: (email: string, password: string, confirm_password: string, username?: string) => Promise<void>;
+  register: (email: string, password: string, confirm_password: string, username: string) => Promise<void>;
+  registerChef: (email: string, password: string, confirm_password: string, username: string, specialty: string, experience: string) => Promise<void>;
   logout: () => void;
   forgotPassword: (email: string) => Promise<void>;
   resetPassword: (email: string, token: string, newPassword: string) => Promise<void>;
   followUser: (userId: string) => Promise<void>;
   getUserProfile: (id: number) => Promise<UserProfile>;
+  getChefProfile: (id: number) => Promise<ChefProfile>;
+  checkChefStatus: () => Promise<string>;
   isAuthenticated: boolean;
+  userRole: string | null;
 }
 
 // Create context
@@ -44,6 +56,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   const BaseUrl = "http://127.0.0.1:8000/"
   const navigate = useNavigate()
@@ -55,12 +68,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   
     if (storedToken && storedUser) {
       try {
-        const decoded = jwtDecode<User>(storedToken);
+        const decoded = jwtDecode<User & { role?: string }>(storedToken);
         console.log("Decoded token:", decoded);
-        setUser(JSON.parse(storedUser)); // Parse the stored user object
+        const parsedUser = JSON.parse(storedUser);
+        setUser(parsedUser);
         setToken(storedToken);
         setIsAuthenticated(true);
-      } catch (error) {
+        setUserRole(parsedUser.role || 'user'); // Set role from storage or default to 'user'
+      } catch {
         // Invalid token, clear storage
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
@@ -88,8 +103,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(userData);
       setToken(access);
       setIsAuthenticated(true);
+      setUserRole(userData.role || 'user');
   
-      navigate("/dashboard");
+      // Navigate based on user role
+      if (userData.role === 'admin') {
+        navigate("/admin-dashboard");
+      } else if (userData.role === 'chef') {
+        navigate("/chef-dashboard");
+      } else {
+        navigate("/user-dashboard");
+      }
+      
       toast.success("Login Successful");
     } catch (error: any) {
       if (error.response?.status === 401 || error.response?.status === 400) {
@@ -98,8 +122,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         toast.error("Login failed. Please try again.");
       }
     }
-};
-
+  };
 
   // Google Login
   const googleLogin = async (googleToken: string) => {
@@ -110,22 +133,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Store tokens
       localStorage.setItem('access_token', access);
       localStorage.setItem('refresh_token', refresh);
+      localStorage.setItem('user', JSON.stringify(userData));
 
       // Set user and authentication state
       setUser(userData);
       setToken(access);
       setIsAuthenticated(true);
+      setUserRole(userData.role || 'user');
+
+      // Navigate based on user role
+      if (userData.role === 'admin') {
+        navigate("/admin-dashboard");
+      } else if (userData.role === 'chef') {
+        navigate("/chef-dashboard");
+      } else {
+        navigate("/user-dashboard");
+      }
     } catch {
       throw new Error('Google login failed');
     }
   };
 
-  // Register function
-  const register = async (email: string, password: string, confirm_password: string, username?: string) => {
+  // Regular user register function
+  const register = async (email: string, password: string, confirm_password: string, username: string) => {
     console.log("Sending registration data:", { username, email, password, confirm_password });
 
     try {
-        const response = await axios.post(`${BaseUrl}api/auth/register/`, { 
+        const response = await axios.post(`${BaseUrl}api/auth/signup/`, { 
             username,
             email,
             password,
@@ -133,57 +167,85 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
 
         console.log("Response received:", response.data);
-
-        const { access, refresh, user: userData } = response.data;
-
-        // Store tokens
-        localStorage.setItem('access_token', access);
-        localStorage.setItem('refresh_token', refresh);
-
-        // Set user and authentication state
-        setUser(userData);
-        setToken(access);
-        setIsAuthenticated(true);
+        toast.success("Registration Successful! Please verify your email to continue.");
         navigate("/login");
-        toast.success("Registration Successful");
     } catch (error: any) {
-        console.error("Registration error:", error.response?.data);
-        
-        // Handle different types of error messages
-        if (error.response?.data) {
-            const errorData = error.response.data;
-            
-            // Check for email errors
-            if (errorData.email) {
-                toast.error(`Email: ${errorData.email[0]}`);
-            }
-            // Check for username errors
-            else if (errorData.username) {
-                toast.error(`Username: ${errorData.username[0]}`);
-            }
-            // Check for password errors
-            else if (errorData.password) {
-                toast.error(`Password: ${errorData.password[0]}`);
-            }
-            // Check for confirm_password errors
-            else if (errorData.confirm_password) {
-                toast.error(`${errorData.confirm_password[0]}`);
-            }
-            // Handle non-field errors
-            else if (errorData.non_field_errors) {
-                toast.error(errorData.non_field_errors[0]);
-            }
-            // Handle unknown errors
-            else {
-                toast.error("Registration failed. Please try again.");
-            }
-        } else {
-            toast.error("Registration failed. Please check your connection.");
-        }
-        
+        handleRegistrationError(error);
         throw new Error('Registration failed');
     }
-};
+  };
+
+  // Chef register function
+  const registerChef = async (
+    email: string, 
+    password: string, 
+    confirm_password: string, 
+    username: string,
+    specialtization: string,
+    years_of_experience: number,
+    certification_number: string,
+    issuing_authority: string,
+    has_accepted_terms: boolean 
+  ) => {
+    try {
+        const response = await axios.post(`${BaseUrl}api/auth/chef/signup/`, { 
+            username,
+            email,
+            password,
+            confirm_password,
+            specialtization,
+            years_of_experience,
+            certification_number,
+            issuing_authority,
+            has_accepted_terms
+
+        });
+
+        console.log("Response received:", response.data);
+        toast.success("Chef Registration Successful! Your application is pending approval.");
+        navigate("/login");
+    } catch (error: any) {
+        handleRegistrationError(error);
+        throw new Error('Chef registration failed');
+    }
+  };
+
+  // Helper function to handle registration errors
+  const handleRegistrationError = (error: any) => {
+    console.error("Registration error:", error.response?.data);
+    
+    // Handle different types of error messages
+    if (error.response?.data) {
+        const errorData = error.response.data;
+        
+        // Check for email errors
+        if (errorData.email) {
+            toast.error(`Email: ${errorData.email[0]}`);
+        }
+        // Check for username errors
+        else if (errorData.username) {
+            toast.error(`Username: ${errorData.username[0]}`);
+        }
+        // Check for password errors
+        else if (errorData.password) {
+            toast.error(`Password: ${errorData.password[0]}`);
+        }
+        // Check for confirm_password errors
+        else if (errorData.confirm_password) {
+            toast.error(`${errorData.confirm_password[0]}`);
+        }
+        // Handle non-field errors
+        else if (errorData.non_field_errors) {
+            toast.error(errorData.non_field_errors[0]);
+        }
+        // Handle unknown errors
+        else {
+            toast.error("Registration failed. Please try again.");
+        }
+    } else {
+        toast.error("Registration failed. Please check your connection.");
+    }
+  };
 
   // Logout function
   const logout = () => {
@@ -196,6 +258,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
     setToken(null);
     setIsAuthenticated(false);
+    setUserRole(null);
     navigate("/login");
     toast.success("Logout Successful");
   };
@@ -220,7 +283,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         new_password: newPassword 
       });
       toast.success('Password reset successful! You can now log in with your new password.');
-      navigate('/login'); // Navigate to login page after successful reset
+      navigate('/login');
     } catch {
       toast.error('Failed to reset password.');
       throw new Error('Failed to reset password');
@@ -230,7 +293,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Get User Profile
   const getUserProfile = async (id: number): Promise<UserProfile> => {
     try {
-      const response = await axios.get(`${BaseUrl}user/profile/${id}/`, {
+      const response = await axios.get(`${BaseUrl}api/auth/user/profile/${id}/`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       return response.data;
@@ -239,12 +302,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // Get Chef Profile
+  const getChefProfile = async (id: number): Promise<ChefProfile> => {
+    try {
+      const response = await axios.get(`${BaseUrl}api/auth/chef/profile/${id}/`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      return response.data;
+    } catch {
+      throw new Error('Failed to fetch chef profile');
+    }
+  };
+
+  // Check Chef Status
+  const checkChefStatus = async (): Promise<string> => {
+    try {
+      const response = await axios.get(`${BaseUrl}api/auth/chef/status/`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      return response.data.status;
+    } catch {
+      throw new Error('Failed to check chef status');
+    }
+  };
+
   // Follow User
   const followUser = async (userId: string) => {
     try {
-      const response = await axios.post(`${BaseUrl}api/auth/follow-user/`, { user_id: userId });
+      const response = await axios.post(`${BaseUrl}api/auth/follow/`, 
+        { user_id: userId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
       return response.data;
-
     } catch {
       throw new Error('Failed to follow user');
     }
@@ -258,12 +347,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const originalRequest = error.config;
 
         // If the error is due to an expired token
-        if (error.response.status === 401 && !originalRequest._retry) {
+        if (error.response?.status === 401 && !originalRequest._retry) {
           originalRequest._retry = true;
 
           try {
             const refreshToken = localStorage.getItem('refresh_token');
-            const response = await axios.post(`${BaseUrl}api/token/refresh/`, { refresh: refreshToken });
+            const response = await axios.post(`${BaseUrl}api/auth/token/refresh/`, { refresh: refreshToken });
             toast.success("Token refreshed successfully");
             
             const { access } = response.data;
@@ -296,12 +385,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     login,
     googleLogin,
     register,
+    registerChef,
     logout,
     forgotPassword,
     resetPassword,
     getUserProfile,
+    getChefProfile,
+    checkChefStatus,
     followUser,
-    isAuthenticated
+    isAuthenticated,
+    userRole
   };
 
   return (

@@ -1,7 +1,7 @@
 import Home from "./Home/Home.page";
 import About from "./About.page";
 import ContactUs from "./ContactUs.page";
-import AuthPage from "./Auth.page";
+// import AuthPage from "./Auth.page";
 import ForgotPassword from "./ForgotPassword.page";
 import ResetPassword from "./ResetPassword.page";
 import ShopPage from "./Shop.page";
@@ -23,11 +23,15 @@ import ProfilePage from "./Dashboard/ProfileDashboard.page";
 import OrderHistoryPage from "./Dashboard/OrderHistory.page";
 import MealPlannerPage from "./Dashboard/MealPlanner.page";
 
+import LoginPage from "./LoginPage";
+import SignupPage from "./Signup.page";
+
 export {
     Home,
     About,
     ContactUs,
-    AuthPage,
+    SignupPage,
+    LoginPage,
     ResetPassword,
     ForgotPassword,
     ShopPage,
