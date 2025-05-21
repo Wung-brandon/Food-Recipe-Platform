@@ -29,7 +29,7 @@ import {
 import Navbar from './components/common/Navbar'
 // import DashboardNavbar from './components/DashboardNavbar'
 import Footer from './components/common/Footer'
-import DashboardLayout from './Layout/DashboardLayout'
+// import DashboardLayout from './Layout/DashboardLayout'
 // import { ThemeProvider } from './context/BackgroundContext'
 import { ToastContainer } from 'react-toastify';
 import { AuthProvider } from './context/AuthContext'
@@ -37,6 +37,11 @@ import { AuthProvider } from './context/AuthContext'
 
 import ChefDashboard from './pages/Dashboard/ChefDashboard/ChefDashboard';
 import UserDashboard from './pages/Dashboard/UserDashboard/UserDashboard';
+import ChefRecipes from './pages/Dashboard/ChefDashboard/ChefRecipe';
+import ChefProfilePage from './pages/Dashboard/ChefDashboard/ChefProfile';
+import CreateRecipePage from './pages/Dashboard/ChefDashboard/ChefCreateRecipe';
+import FollowersPage from './pages/Dashboard/ChefDashboard/ChefFollowersPage';
+import AnalyticsPage from './pages/Dashboard/ChefDashboard/ChefAnalytics';
 function App() {
     return (
       <>
@@ -74,7 +79,15 @@ function App() {
     
               {/* Dashboard Routes without Main Navbar and Footer */}
               
+              {/* Dashboard route */}
                 <Route path='/dashboard/chef' element={<ChefDashboard />}/>
+                <Route path='/dashboard/chef/recipe' element={<ChefRecipes />}/>
+                <Route path='/dashboard/chef/profile/:id' element={<ChefProfilePage />}/>
+                <Route path="/dashboard/chef/create-recipe" element={<CreateRecipePage />} />
+                <Route path='/dashboard/chef/followers' element={<FollowersPage />}/>
+                <Route path='/dashboard/chef/analytics' element={<AnalyticsPage />}/>
+
+
                 <Route path='/dashboard/user' element={<UserDashboard />}/>
                 <Route index element={<DashboardPage />} />
                 <Route path='favorites' element={<FavoritesPage />} />

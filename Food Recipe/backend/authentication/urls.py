@@ -4,7 +4,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 urlpatterns = [
     # Authentication endpoints
-    path('token/', views.MyTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('token/', views.MyTokenObtainPairView.as_view(), name='token_obtain'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     
     # User registration and profile
@@ -13,6 +13,8 @@ urlpatterns = [
     path('user/profile/', views.ListCreateUserProfileView.as_view(), name='user-profile'),
     path('user/profile/<int:id>/', views.RetrieveUpdateUserProfileView.as_view(), name='user-profile-detail'),
     path('user/', views.GetUserView.as_view(), name='get-user'),
+    path('allusers/', views.ListAllUsersView.as_view(), name='all-users'),
+    path('allchefs/', views.ListAllChefsView.as_view(), name='all-chefs'),
     
     # Chef specific endpoints
     path('chef/profile/<int:id>/', views.RetrieveUpdateChefProfileView.as_view(), name='chef-profile-detail'),

@@ -17,3 +17,4 @@ class UserFollowingAdmin(admin.ModelAdmin):
 admin.site.register(CustomUser, CustomUserAdmin)
 admin.site.register(UserProfile, UserProfileAdmin)
 admin.site.register(UserFollowing, UserFollowingAdmin)
+admin.site.register(ChefProfile, ChefProfileAdmin)

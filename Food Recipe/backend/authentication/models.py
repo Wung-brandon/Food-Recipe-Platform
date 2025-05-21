@@ -1,8 +1,12 @@
-from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+import logging
 from django.db import models
 from django.utils import timezone
-from django.db.models.signals import post_save
 from django.core.exceptions import ObjectDoesNotExist
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.db.models.signals import post_save, pre_save
+from django.dispatch import receiver
+
+logger = logging.getLogger(__name__)
 
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, username, password=None, **extra_fields):
@@ -56,7 +60,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 
 class UserProfile(models.Model):
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='profile')
-    full_name = models.CharField(max_length=100)
+    full_name = models.CharField(max_length=100, blank=True, null=True)
     bio = models.TextField(blank=True, null=True)
     followers_count = models.PositiveIntegerField(default=0)
     following_count = models.PositiveIntegerField(default=0)
@@ -75,7 +79,7 @@ class ChefProfile(models.Model):
     SPECIALIZATION_CHOICES = (
         ('ITALIAN', 'Italian Cuisine'),
         ('FRENCH', 'French Cuisine'),
-        ('AFRICAN', 'Afican Cuisine'),
+        ('AFRICAN', 'African Cuisine'),
         ('INDIAN', 'Indian Cuisine'),
         ('CHINESE', 'Chinese Cuisine'),
         ('JAPANESE', 'Japanese Cuisine'),
@@ -88,6 +92,7 @@ class ChefProfile(models.Model):
     
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='chef_profile')
     verification_status = models.CharField(max_length=20, choices=VERIFICATION_STATUS, default='PENDING')
+    profile_picture = models.ImageField(upload_to='chef/chef_pics/', blank=True, null=True)
     years_of_experience = models.PositiveIntegerField(default=0)
     specialization = models.CharField(max_length=20, choices=SPECIALIZATION_CHOICES, default='OTHER')
     certification = models.FileField(upload_to='chef/chef_certifications/', blank=True, null=True)
@@ -122,19 +127,37 @@ class UserFollowing(models.Model):
             
             self.target_user.profile.followers_count += 1
             self.target_user.profile.save()
-            
-def create_profile(sender, instance, created, **kwargs):
-    if created:
-        UserProfile.objects.create(user=instance)
-        # Create chef profile if user role is chef
-        if instance.role == 'CHEF':
-            ChefProfile.objects.create(user=instance)
 
+# Improved signal handling to prevent duplicate ChefProfile creation
+@receiver(post_save, sender=CustomUser)
+def create_profile(sender, instance, created, **kwargs):
+    try:
+        if created:
+            logger.info(f"Creating UserProfile for new user: {instance.email}")
+            UserProfile.objects.create(user=instance)
+            
+            # Create chef profile if user role is chef
+            if instance.role == 'CHEF':
+                logger.info(f"Creating ChefProfile for new chef: {instance.email}")
+                # Check if chef profile already exists to prevent duplicates
+                if not hasattr(instance, 'chef_profile'):
+                    ChefProfile.objects.create(user=instance)
+                else:
+                    logger.warning(f"Chef profile already exists for user: {instance.email}")
+    except Exception as e:
+        logger.error(f"Error in create_profile signal: {str(e)}")
+
+@receiver(post_save, sender=CustomUser)
 def save_profile(sender, instance, **kwargs):
     try:
-        instance.profile.save()
-    except ObjectDoesNotExist:
-        UserProfile.objects.create(user=instance)
-
-post_save.connect(create_profile, sender=CustomUser)
-post_save.connect(save_profile, sender=CustomUser)
+        # Ensure UserProfile exists
+        if not hasattr(instance, 'profile'):
+            UserProfile.objects.create(user=instance)
+        else:
+            instance.profile.save()
+            
+        # If user is a chef, ensure ChefProfile exists
+        if instance.role == 'CHEF' and not hasattr(instance, 'chef_profile'):
+            ChefProfile.objects.create(user=instance)
+    except Exception as e:
+        logger.error(f"Error in save_profile signal: {str(e)}")

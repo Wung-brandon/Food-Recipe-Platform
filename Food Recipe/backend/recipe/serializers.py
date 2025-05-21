@@ -150,6 +150,28 @@ class RecipeCreateUpdateSerializer(serializers.ModelSerializer):
             'category', 'ingredients', 'steps', 'tips', 'tags'
         ]
     
+    def validate(self, data):
+        # Get the user from the request context
+        user = self.context['request'].user
+        
+        # Check if user is a chef
+        if not user.role == 'CHEF':
+            raise serializers.ValidationError("Only chefs can create recipes.")
+        
+        # Check if user is verified
+        if not user.is_verified:
+            raise serializers.ValidationError("Your account must be verified to create recipes.")
+        
+        # Check if chef profile exists and is verified
+        try:
+            chef_profile = user.chef_profile
+            if chef_profile.verification_status != 'VERIFIED':
+                raise serializers.ValidationError("Your chef profile must be verified to create recipes.")
+        except:
+            raise serializers.ValidationError("Chef profile not found or not properly set up.")
+        
+        return data
+    
     def create(self, validated_data):
         ingredients_data = validated_data.pop('ingredients')
         steps_data = validated_data.pop('steps')
@@ -221,6 +243,7 @@ class RecipeCreateUpdateSerializer(serializers.ModelSerializer):
             instance.tags.set(tags_data)
         
         return instance
+
 
 
 class FavoriteRecipeSerializer(serializers.ModelSerializer):

@@ -187,7 +187,7 @@ const UserDashboard: React.FC = () => {
   );
 
   return (
-    <DashboardLayout title="User Dashboard" navItems={navItems}>
+    <DashboardLayout title="User Dashboard">
       <Grid container spacing={3}>
         {/* Welcome section */}
         <Grid item xs={12}>

@@ -1,11 +1,7 @@
-from django.shortcuts import render
-
-# Create your views here.
-# recipes/views.py
 from rest_framework import generics, permissions, status, filters
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import ValidationError, PermissionDenied
 from django.shortcuts import get_object_or_404
 from django.db.models import Avg, Count, Q
 from django_filters.rest_framework import DjangoFilterBackend
@@ -20,7 +16,7 @@ from .serializers import (
     CommentSerializer, RatingSerializer,
     FavoriteRecipeSerializer, LikedRecipeSerializer
 )
-from .permissions import IsAuthorOrReadOnly
+from .permissions import IsAuthorOrReadOnly, IsVerifiedChef
 from .filters import RecipeFilter
 
 
@@ -53,10 +49,10 @@ class TagDetailView(generics.RetrieveUpdateDestroyAPIView):
     lookup_field = 'slug'
     permission_classes = [permissions.IsAdminUser]
 
-
 class RecipeListCreateView(generics.ListCreateAPIView):
     queryset = Recipe.objects.all()
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    # Change permission classes to include IsVerifiedChef
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsVerifiedChef]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = RecipeFilter
     search_fields = ['title', 'description', 'author__username', 'category__name', 'tags__name']
@@ -90,7 +86,62 @@ class RecipeListCreateView(generics.ListCreateAPIView):
             queryset = queryset.filter(likes=self.request.user)
         
         return queryset
+    
+    def perform_create(self, serializer):
+        # Get user object
+        user = self.request.user
+        
+        # Double-check user's chef and verification status before creating
+        if not user.role == 'CHEF':
+            raise PermissionDenied("Only chefs can create recipes.")
+        
+        if not user.is_verified:
+            raise PermissionDenied("Your account must be verified to create recipes.")
+        
+        try:
+            chef_profile = user.chef_profile
+            if chef_profile.verification_status != 'VERIFIED':
+                raise PermissionDenied("Your chef profile must be verified to create recipes.")
+        except:
+            raise PermissionDenied("Chef profile not found or not properly set up.")
+        
+        # If all checks pass, save the recipe
+        serializer.save(author=user)
 
+
+class RecipeDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Recipe.objects.all()
+    lookup_field = 'slug'
+    # Include IsVerifiedChef permission to ensure only verified chefs can update
+    permission_classes = [IsAuthorOrReadOnly, IsVerifiedChef]
+    
+    def get_serializer_class(self):
+        if self.request.method in ['PUT', 'PATCH']:
+            return RecipeCreateUpdateSerializer
+        return RecipeDetailSerializer
+    
+    def get_queryset(self):
+        return Recipe.objects.annotate(
+            average_rating=Avg('ratings__value'),
+            rating_count=Count('ratings', distinct=True),
+            like_count=Count('likes', distinct=True)
+        )
+
+
+# Add this new view to create recipe drafts that will be ready for publishing once verified
+class RecipeDraftCreateView(generics.CreateAPIView):
+    serializer_class = RecipeCreateUpdateSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def perform_create(self, serializer):
+        user = self.request.user
+        
+        # Check if user is a chef (but don't require verification)
+        if not user.role == 'CHEF':
+            raise PermissionDenied("Only chefs can create recipe drafts.")
+        
+        # Save the recipe as draft (assuming you add a 'is_draft' field to Recipe model)
+        serializer.save(author=user, is_draft=True)
 
 class UserRecipesView(generics.ListAPIView):
     serializer_class = RecipeListSerializer
@@ -116,22 +167,6 @@ class UserFavoritesView(generics.ListAPIView):
         )
 
 
-class RecipeDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Recipe.objects.all()
-    lookup_field = 'slug'
-    permission_classes = [IsAuthorOrReadOnly]
-    
-    def get_serializer_class(self):
-        if self.request.method in ['PUT', 'PATCH']:
-            return RecipeCreateUpdateSerializer
-        return RecipeDetailSerializer
-    
-    def get_queryset(self):
-        return Recipe.objects.annotate(
-            average_rating=Avg('ratings__value'),
-            rating_count=Count('ratings', distinct=True),
-            like_count=Count('likes', distinct=True)
-        )
 
 
 class CommentListCreateView(generics.ListCreateAPIView):

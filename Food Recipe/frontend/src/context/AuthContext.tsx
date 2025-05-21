@@ -32,11 +32,25 @@ interface ChefProfile extends UserProfile {
 
 interface AuthContextType {
   user: User | null;
+  isLoading: boolean;
   token: string | null;
   login: (email: string, password: string) => Promise<void>;
   googleLogin: (token: string) => Promise<void>;
   register: (email: string, password: string, confirm_password: string, username: string) => Promise<void>;
-  registerChef: (email: string, password: string, confirm_password: string, username: string, specialty: string, experience: string) => Promise<void>;
+  registerChef: (
+    email: string,
+    password: string,
+    confirmPassword: string,
+    username: string,
+    specialization: string,
+    years_of_experience: string,
+    certification_number: string,
+    issuing_authority: string,
+    has_accepted_terms: boolean,
+    certification: File,
+    identity_proof: File,
+    food_safety_certification: File
+  ) => Promise<void>;
   logout: () => void;
   forgotPassword: (email: string) => Promise<void>;
   resetPassword: (email: string, token: string, newPassword: string) => Promise<void>;
@@ -92,12 +106,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         { headers: { "Content-Type": "application/json" } }
       );
   
-      const { access, refresh, user: userData } = response.data;
+      const { access, refresh } = response.data;
+
+      console.log("Login response:", response.data);
   
-      // Store tokens and user in local storage
+      // Ensure response data is valid
+      if (!access || !refresh) {
+        throw new Error("Invalid response from server");
+      }
+  
+      // Store tokens in local storage
       localStorage.setItem('access_token', access);
       localStorage.setItem('refresh_token', refresh);
-      localStorage.setItem('user', JSON.stringify(userData));
+  
+      // Fetch user details
+      const userResponse = await axios.get(`${BaseUrl}api/auth/user/`, {
+        headers: { Authorization: `Bearer ${access}` }
+      });
+  
+      const userData = userResponse.data;
+      console.log("User data:", userData);
   
       // Set user and authentication state
       setUser(userData);
@@ -108,22 +136,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Navigate based on user role
       if (userData.role === 'admin') {
         navigate("/admin-dashboard");
-      } else if (userData.role === 'chef') {
-        navigate("/chef-dashboard");
+      } else if (userData.role === 'CHEF') {
+        navigate("/dashboard/chef");
       } else {
-        navigate("/user-dashboard");
+        navigate("/dashboard/user");
       }
-      
+  
       toast.success("Login Successful");
     } catch (error: any) {
+      // Handle specific error cases
       if (error.response?.status === 401 || error.response?.status === 400) {
         toast.error("Invalid credentials");
+      } else if (error.message === "Invalid response from server") {
+        toast.error("Unexpected server response. Please contact support.");
       } else {
         toast.error("Login failed. Please try again.");
       }
     }
   };
-
   // Google Login
   const googleLogin = async (googleToken: string) => {
     try {
@@ -154,62 +184,127 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Regular user register function
-  const register = async (email: string, password: string, confirm_password: string, username: string) => {
-    console.log("Sending registration data:", { username, email, password, confirm_password });
+  // Update the register function in AuthContext.tsx to match backend expectations
 
-    try {
-        const response = await axios.post(`${BaseUrl}api/auth/signup/`, { 
-            username,
-            email,
-            password,
-            confirm_password 
-        });
+// Regular user register function
+const register = async (email: string, password: string, confirm_password: string, username: string) => {
+  console.log("Sending registration data:", { username, email, password, confirm_password });
 
-        console.log("Response received:", response.data);
-        toast.success("Registration Successful! Please verify your email to continue.");
-        navigate("/login");
-    } catch (error: any) {
-        handleRegistrationError(error);
-        throw new Error('Registration failed');
+  try {
+    const response = await axios.post(`${BaseUrl}api/auth/signup/`, { 
+      username,
+      email,
+      password,
+      confirm_password
+    });
+
+    console.log("Response received:", response.data);
+    toast.success("Registration Successful! You can now login.");
+    navigate("/login");
+    return response.data;
+  } catch (error: any) {
+    console.error("Registration error:", error);
+    
+    // Check if it's a 500 error related to email
+    if (error.response?.status === 500) {
+      // The user might be created but email failed
+      toast.warning("Your account was created but we couldn't send a verification email. Please contact support.");
+      navigate("/login");
+      return;
     }
-  };
+    
+    handleRegistrationError(error);
+    throw new Error('Registration failed');
+  }
+};
 
-  // Chef register function
-  const registerChef = async (
-    email: string, 
-    password: string, 
-    confirm_password: string, 
-    username: string,
-    specialtization: string,
-    years_of_experience: number,
-    certification_number: string,
-    issuing_authority: string,
-    has_accepted_terms: boolean 
-  ) => {
-    try {
-        const response = await axios.post(`${BaseUrl}api/auth/chef/signup/`, { 
-            username,
-            email,
-            password,
-            confirm_password,
-            specialtization,
-            years_of_experience,
-            certification_number,
-            issuing_authority,
-            has_accepted_terms
+// Chef register function corrected to match backend expectations
+const registerChef = async (
+  email: string,
+  password: string,
+  confirmPassword: string,
+  username: string,
+  specialization: string,
+  years_of_experience: string,
+  certification_number: string,
+  issuing_authority: string,
+  has_accepted_terms: boolean,
+  certification: File,
+  identity_proof: File,
+  food_safety_certification: File
+) => {
+  try {
+    // Create FormData for file uploads
+    const formData = new FormData();
 
-        });
+    // Add user fields as a nested object
+    const userData = {
+      email,
+      password,
+      confirm_password: confirmPassword,
+      username,
+    };
+    formData.append('user', JSON.stringify(userData));
 
-        console.log("Response received:", response.data);
-        toast.success("Chef Registration Successful! Your application is pending approval.");
-        navigate("/login");
-    } catch (error: any) {
-        handleRegistrationError(error);
-        throw new Error('Chef registration failed');
+    // Add chef profile data
+    formData.append('specialization', specialization);
+    formData.append('years_of_experience', years_of_experience);
+    formData.append('certification_number', certification_number);
+    formData.append('issuing_authority', issuing_authority);
+    formData.append('has_accepted_terms', has_accepted_terms.toString());
+
+    // Add files
+    formData.append('certification', certification);
+    formData.append('identity_proof', identity_proof);
+    formData.append('food_safety_certification', food_safety_certification);
+
+    console.log("Sending chef registration data:", {
+      user: userData,
+      specialization,
+      years_of_experience,
+      certification_number,
+      issuing_authority,
+      has_accepted_terms,
+      files: {
+        certification: certification?.name,
+        identity_proof: identity_proof?.name,
+        food_safety_certification: food_safety_certification?.name,
+      },
+    });
+
+    // Send the request to the backend
+    const response = await axios.post(`${BaseUrl}api/auth/chef/signup/`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+
+    console.log("Chef registration response:", response.data);
+    toast.success("Chef Registration Successful! Your application is pending approval.");
+    return response.data;
+  } catch (error: any) {
+    console.error("Full error object:", error);
+
+    // Enhanced error handling
+    if (error.response?.data) {
+      const errorData = error.response.data;
+
+      // Handle field errors
+      for (const [field, messages] of Object.entries(errorData)) {
+        if (Array.isArray(messages)) {
+          toast.error(`${field}: ${messages[0]}`);
+        }
+        return; // Show only the first error
+      }
+    } else if (error.request) {
+      toast.error("No response from server. Please check your connection.");
+    } else {
+      toast.error("Error setting up request: " + error.message);
     }
-  };
 
+    throw new Error('Chef registration failed');
+  }
+};
   // Helper function to handle registration errors
   const handleRegistrationError = (error: any) => {
     console.error("Registration error:", error.response?.data);

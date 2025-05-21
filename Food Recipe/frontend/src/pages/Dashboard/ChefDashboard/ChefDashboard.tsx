@@ -22,17 +22,15 @@ import {
   Badge
 } from '@mui/material';
 import { 
-  Dashboard as DashboardIcon,
   AddCircle as AddCircleIcon,
-  MenuBook as MenuBookIcon,
   People as PeopleIcon,
   Visibility as VisibilityIcon,
   ThumbUp as ThumbUpIcon,
   Comment as CommentIcon,
   Edit as EditIcon,
   DeleteOutline as DeleteOutlineIcon,
-  Notifications as NotificationsIcon,
-  Message as MessageIcon
+  Message as MessageIcon,
+  
 } from '@mui/icons-material';
 import DashboardLayout from '../../../Layout/DashboardLayout';
 import { useAuth } from '../../../context/AuthContext';
@@ -68,13 +66,6 @@ const ChefDashboard: React.FC = () => {
   });
   const [recentRecipes, setRecentRecipes] = useState<RecipeStats[]>([]);
   const [recentComments, setRecentComments] = useState<RecentComment[]>([]);
-
-  const navItems = [
-    { icon: <DashboardIcon />, text: 'Dashboard', path: '/chef-dashboard' },
-    { icon: <MenuBookIcon />, text: 'My Recipes', path: '/my-recipes' },
-    { icon: <AddCircleIcon />, text: 'Create Recipe', path: '/create-recipe' },
-    { icon: <PeopleIcon />, text: 'Followers', path: '/followers' },
-  ];
 
   // Sample data
   const sampleRecipes: RecipeStats[] = [
@@ -148,7 +139,7 @@ const ChefDashboard: React.FC = () => {
   }, []);
 
   return (
-    <DashboardLayout title="Chef Dashboard" navItems={navItems}>
+    <DashboardLayout title="Chef Dashboard">
       {/* Verification Status Alert */}
       {verificationStatus === 'pending' && (
         <Alert 
@@ -215,7 +206,7 @@ const ChefDashboard: React.FC = () => {
               <Button 
                 startIcon={<AddCircleIcon />}
                 sx={{ mt: 2, color: '#d97706' }}
-                onClick={() => navigate('/create-recipe')}
+                onClick={() => navigate('/dashboard/chef/create-recipe')}
               >
                 Add New
               </Button>
@@ -273,7 +264,7 @@ const ChefDashboard: React.FC = () => {
               <Button 
                 startIcon={<PeopleIcon />}
                 sx={{ mt: 2, color: '#d97706' }}
-                onClick={() => navigate('/followers')}
+                onClick={() => navigate('/dashboard/chef/followers')}
               >
                 View All
               </Button>
@@ -289,7 +280,7 @@ const ChefDashboard: React.FC = () => {
               <Button 
                 size="small" 
                 sx={{ color: '#d97706' }}
-                onClick={() => navigate('/my-recipes')}
+                onClick={() => navigate('/dashboard/chef/recipe')}
               >
                 View All
               </Button>

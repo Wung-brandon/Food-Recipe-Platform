@@ -1,45 +1,13 @@
-import React, { useState } from "react";
-import {
-  TextField,
-  Button,
-  Typography,
-  InputAdornment,
-  IconButton,
-  CircularProgress,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Paper,
-  Grid,
-  Box,
-  SelectChangeEvent,
-  FormControlLabel,
-  Checkbox,
-  Stepper,
-  Step,
-  StepLabel,
-  FormHelperText,
-  Divider,
-} from "@mui/material";
-import { Link } from "react-router-dom";
+import React, { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { toast } from 'react-toastify';
 import { 
-  Visibility, 
-  VisibilityOff, 
-  Email, 
-  Lock, 
-  Person, 
-  RestaurantMenu, 
-  Work, 
-  VerifiedUser,
-  Security,
-  Article,
-  FileUpload,
-  Badge
-} from "@mui/icons-material";
-import { spaghetti } from "../components/images";
-import { useAuth } from "../context/AuthContext";
-import { toast } from "react-toastify";
+  Typography, Button, Box, TextField, FormControl, InputLabel, 
+  Select, MenuItem, FormControlLabel, Checkbox, InputAdornment,
+  IconButton, Stepper, Step, StepLabel, Paper, SelectChangeEvent
+} from '@mui/material';
+import { Visibility, VisibilityOff } from '@mui/icons-material';
+import { Link } from 'react-router-dom';
 
 // Define specialization choices based on backend
 const SPECIALIZATION_CHOICES = [
@@ -80,6 +48,7 @@ const SignupPage: React.FC = () => {
     has_accepted_terms: false
   });
 
+  console.log("Form Data:", formData);
   // Handle Input Change
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -171,36 +140,27 @@ const SignupPage: React.FC = () => {
           return;
         }
         
-        // Create FormData object for file uploads
-        const chefFormData = new FormData();
-        chefFormData.append("email", formData.email);
-        chefFormData.append("password", formData.password);
-        chefFormData.append("confirmPassword", formData.confirmPassword);
-        chefFormData.append("username", formData.username);
-        chefFormData.append("specialization", formData.specialization);
-        chefFormData.append("years_of_experience", formData.years_of_experience.toString());
-        chefFormData.append("certification_number", formData.certification_number);
-        chefFormData.append("issuing_authority", formData.issuing_authority);
-        chefFormData.append("has_accepted_terms", formData.has_accepted_terms.toString());
-        
-        // Append files
-        if (fileUploads.certification) {
-          chefFormData.append("certification", fileUploads.certification);
-        }
-        if (fileUploads.identity_proof) {
-          chefFormData.append("identity_proof", fileUploads.identity_proof);
-        }
-        if (fileUploads.food_safety_certification) {
-          chefFormData.append("food_safety_certification", fileUploads.food_safety_certification);
+        // Ensure all required files are present
+        if (!fileUploads.certification || !fileUploads.identity_proof || !fileUploads.food_safety_certification) {
+          toast.error("Please upload all required documents");
+          setLoading(false);
+          return;
         }
         
+        // Call the registerChef function with all required parameters
         await registerChef(
           formData.email,
           formData.password,
           formData.confirmPassword,
           formData.username,
           formData.specialization,
-          formData.years_of_experience.toString()
+          formData.years_of_experience.toString(),
+          formData.certification_number,
+          formData.issuing_authority,
+          formData.has_accepted_terms,
+          fileUploads.certification,
+          fileUploads.identity_proof,
+          fileUploads.food_safety_certification
         );
       } else {
         // Regular user registration
@@ -220,129 +180,88 @@ const SignupPage: React.FC = () => {
     }
   };
 
-  // Chef registration steps content
-  const renderChefSteps = () => {
+  // Render the appropriate step based on activeChefStep
+  const renderChefStep = () => {
     switch (activeChefStep) {
-      case 0:
+      case 0: // Basic Info
         return (
-          <>
-            <Typography variant="h6" className="mb-4">
-              Basic Information
-            </Typography>
-            
-            {/* Username Field */}
+          <Box>
+            <Typography variant="h6" mb={2}>Basic Information</Typography>
             <TextField
               fullWidth
               label="Username"
               name="username"
-              variant="outlined"
-              required
               value={formData.username}
               onChange={handleChange}
-              className="mb-4"
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Person />
-                  </InputAdornment>
-                ),
-              }}
+              margin="normal"
+              required
             />
-
-            {/* Email Field */}
             <TextField
               fullWidth
               label="Email"
               name="email"
-              variant="outlined"
               type="email"
-              required
               value={formData.email}
               onChange={handleChange}
-              className="mb-4"
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Email />
-                  </InputAdornment>
-                ),
-              }}
+              margin="normal"
+              required
             />
-
-            {/* Password Field */}
             <TextField
               fullWidth
               label="Password"
               name="password"
-              variant="outlined"
               type={showPassword ? "text" : "password"}
-              required
               value={formData.password}
               onChange={handleChange}
-              className="mb-4"
+              margin="normal"
+              required
               InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Lock />
-                  </InputAdornment>
-                ),
                 endAdornment: (
                   <InputAdornment position="end">
-                    <IconButton onClick={() => setShowPassword(!showPassword)}>
+                    <IconButton
+                      onClick={() => setShowPassword(!showPassword)}
+                      edge="end"
+                    >
                       {showPassword ? <VisibilityOff /> : <Visibility />}
                     </IconButton>
                   </InputAdornment>
-                ),
+                )
               }}
             />
-
-            {/* Confirm Password Field */}
             <TextField
               fullWidth
               label="Confirm Password"
               name="confirmPassword"
-              variant="outlined"
-              type="password"
-              required
+              type={showPassword ? "text" : "password"}
               value={formData.confirmPassword}
               onChange={handleChange}
-              className="mb-4"
+              margin="normal"
+              required
             />
-            
-            <Button
-              fullWidth
-              variant="contained"
-              color="primary"
-              onClick={handleNext}
-              disabled={!validateBasicInfoStep()}
-              className="mt-4"
-            >
-              Next
-            </Button>
-          </>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
+              <Button 
+                variant="contained" 
+                color="primary" 
+                onClick={handleNext}
+                disabled={!validateBasicInfoStep()}
+              >
+                Next
+              </Button>
+            </Box>
+          </Box>
         );
       
-      case 1:
+      case 1: // Chef Experience
         return (
-          <>
-            <Typography variant="h6" className="mb-4">
-              Culinary Experience
-            </Typography>
-            
-            {/* Specialization Field */}
-            <FormControl fullWidth variant="outlined" className="mb-4" required>
-              <InputLabel id="specialization-label">Specialization</InputLabel>
+          <Box>
+            <Typography variant="h6" mb={2}>Professional Experience</Typography>
+            <FormControl fullWidth margin="normal" required>
+              <InputLabel>Culinary Specialization</InputLabel>
               <Select
-                labelId="specialization-label"
                 name="specialization"
                 value={formData.specialization}
                 onChange={handleSpecializationChange}
-                label="Specialization"
-                startAdornment={
-                  <InputAdornment position="start">
-                    <RestaurantMenu />
-                  </InputAdornment>
-                }
+                label="Culinary Specialization"
               >
                 {SPECIALIZATION_CHOICES.map((option) => (
                   <MenuItem key={option.value} value={option.value}>
@@ -351,204 +270,123 @@ const SignupPage: React.FC = () => {
                 ))}
               </Select>
             </FormControl>
-            
-            {/* Years of Experience Field */}
             <TextField
               fullWidth
               label="Years of Experience"
               name="years_of_experience"
-              variant="outlined"
               type="number"
-              required
-              inputProps={{ min: 0 }}
               value={formData.years_of_experience}
               onChange={handleChange}
-              className="mb-4"
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Work />
-                  </InputAdornment>
-                ),
-              }}
+              margin="normal"
+              required
+              inputProps={{ min: 0 }}
             />
-            
-            <Box className="flex justify-between mt-4">
-              <Button onClick={handleBack}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
+              <Button variant="outlined" onClick={handleBack}>
                 Back
               </Button>
-              <Button
-                variant="contained"
-                color="primary"
+              <Button 
+                variant="contained" 
+                color="primary" 
                 onClick={handleNext}
                 disabled={!validateChefExperienceStep()}
               >
                 Next
               </Button>
             </Box>
-          </>
+          </Box>
         );
       
-      case 2:
+      case 2: // Certifications
         return (
-          <>
-            <Typography variant="h6" className="mb-4">
-              Certifications
-            </Typography>
-            
-            {/* Certification Upload */}
-            <Typography variant="subtitle2" className="mb-1">
-              Professional Certificate
-            </Typography>
-            <Box className="mb-4">
-              <input
-                accept="image/*,application/pdf"
-                style={{ display: 'none' }}
-                id="certification-upload"
-                type="file"
-                onChange={(e) => handleFileChange(e as React.ChangeEvent<HTMLInputElement>, 'certification')}
-              />
-              <label htmlFor="certification-upload">
-                <Button
-                  variant="outlined"
-                  component="span"
-                  startIcon={<FileUpload />}
-                  fullWidth
-                >
-                  {fileUploads.certification ? fileUploads.certification.name : "Upload Certification"}
-                </Button>
-              </label>
-              {fileUploads.certification && (
-                <FormHelperText>
-                  File selected: {fileUploads.certification.name}
-                </FormHelperText>
-              )}
-            </Box>
-            
-            {/* Certification Number Field */}
+          <Box>
+            <Typography variant="h6" mb={2}>Professional Certifications</Typography>
             <TextField
               fullWidth
               label="Certification Number"
               name="certification_number"
-              variant="outlined"
-              required
               value={formData.certification_number}
               onChange={handleChange}
-              className="mb-4"
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Badge />
-                  </InputAdornment>
-                ),
-              }}
+              margin="normal"
+              required
             />
-            
-            {/* Issuing Authority Field */}
             <TextField
               fullWidth
               label="Issuing Authority"
               name="issuing_authority"
-              variant="outlined"
-              required
               value={formData.issuing_authority}
               onChange={handleChange}
-              className="mb-4"
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <VerifiedUser />
-                  </InputAdornment>
-                ),
-              }}
+              margin="normal"
+              required
             />
-            
-            {/* Food Safety Certification Upload */}
-            <Typography variant="subtitle2" className="mb-1">
-              Food Safety Certification
-            </Typography>
-            <Box className="mb-4">
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle1" gutterBottom>
+                Upload Certification Document
+              </Typography>
               <input
-                accept="image/*,application/pdf"
-                style={{ display: 'none' }}
-                id="food-safety-upload"
+                accept="image/*,.pdf"
                 type="file"
-                onChange={(e) => handleFileChange(e as React.ChangeEvent<HTMLInputElement>, 'food_safety_certification')}
+                onChange={(e) => handleFileChange(e, "certification")}
+                style={{ marginBottom: '16px' }}
               />
-              <label htmlFor="food-safety-upload">
-                <Button
-                  variant="outlined"
-                  component="span"
-                  startIcon={<FileUpload />}
-                  fullWidth
-                >
-                  {fileUploads.food_safety_certification ? fileUploads.food_safety_certification.name : "Upload Food Safety Certificate"}
-                </Button>
-              </label>
-              {fileUploads.food_safety_certification && (
-                <FormHelperText>
-                  File selected: {fileUploads.food_safety_certification.name}
-                </FormHelperText>
+              {fileUploads.certification && (
+                <Typography variant="body2" color="primary" gutterBottom>
+                  File selected: {fileUploads.certification.name}
+                </Typography>
               )}
             </Box>
-            
-            <Box className="flex justify-between mt-4">
-              <Button onClick={handleBack}>
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle1" gutterBottom>
+                Food Safety Certification
+              </Typography>
+              <input
+                accept="image/*,.pdf"
+                type="file"
+                onChange={(e) => handleFileChange(e, "food_safety_certification")}
+                style={{ marginBottom: '16px' }}
+              />
+              {fileUploads.food_safety_certification && (
+                <Typography variant="body2" color="primary" gutterBottom>
+                  File selected: {fileUploads.food_safety_certification.name}
+                </Typography>
+              )}
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
+              <Button variant="outlined" onClick={handleBack}>
                 Back
               </Button>
-              <Button
-                variant="contained"
-                color="primary"
+              <Button 
+                variant="contained" 
+                color="primary" 
                 onClick={handleNext}
                 disabled={!validateCertificationsStep()}
               >
                 Next
               </Button>
             </Box>
-          </>
+          </Box>
         );
       
-      case 3:
+      case 3: // Verification
         return (
-          <>
-            <Typography variant="h6" className="mb-4">
-              Verification & Terms
-            </Typography>
-            
-            {/* Identity Proof Upload */}
-            <Typography variant="subtitle2" className="mb-1">
-              Identity Proof Document
-            </Typography>
-            <Box className="mb-4">
+          <Box>
+            <Typography variant="h6" mb={2}>Identity Verification</Typography>
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle1" gutterBottom>
+                Upload Identity Proof (Government ID)
+              </Typography>
               <input
-                accept="image/*,application/pdf"
-                style={{ display: 'none' }}
-                id="identity-upload"
+                accept="image/*,.pdf"
                 type="file"
-                onChange={(e) => handleFileChange(e as React.ChangeEvent<HTMLInputElement>, 'identity_proof')}
+                onChange={(e) => handleFileChange(e, "identity_proof")}
+                style={{ marginBottom: '16px' }}
               />
-              <label htmlFor="identity-upload">
-                <Button
-                  variant="outlined"
-                  component="span"
-                  startIcon={<FileUpload />}
-                  fullWidth
-                >
-                  {fileUploads.identity_proof ? fileUploads.identity_proof.name : "Upload Identity Proof"}
-                </Button>
-              </label>
               {fileUploads.identity_proof && (
-                <FormHelperText>
+                <Typography variant="body2" color="primary" gutterBottom>
                   File selected: {fileUploads.identity_proof.name}
-                </FormHelperText>
+                </Typography>
               )}
             </Box>
-            
-            <FormHelperText className="mb-4">
-              Please upload a government-issued ID (passport, driver's license, etc.)
-            </FormHelperText>
-            
-            {/* Terms and Conditions */}
             <FormControlLabel
               control={
                 <Checkbox
@@ -556,39 +394,24 @@ const SignupPage: React.FC = () => {
                   onChange={handleCheckboxChange}
                   name="has_accepted_terms"
                   color="primary"
-                  required
                 />
               }
-              label={
-                <Typography variant="body2">
-                  I accept the Terms and Conditions for Chef Registration, including verification procedures and content guidelines.
-                </Typography>
-              }
-              className="mb-2"
+              label="I agree to the Terms and Conditions and Privacy Policy"
             />
-            
-            <Typography variant="body2" color="text.secondary" className="mb-4">
-              By registering as a chef, you agree to our verification process and content standards. Your application will be reviewed by our team.
-            </Typography>
-            
-            <Box className="flex justify-between mt-4">
-              <Button onClick={handleBack}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
+              <Button variant="outlined" onClick={handleBack}>
                 Back
               </Button>
-              <Button
+              <Button 
                 type="submit"
-                variant="contained"
-                color="primary"
+                variant="contained" 
+                color="primary" 
                 disabled={loading || !validateVerificationStep()}
               >
-                {loading ? (
-                  <CircularProgress size={24} sx={{ color: "white" }} />
-                ) : (
-                  "Submit Chef Application"
-                )}
+                Register as Chef
               </Button>
             </Box>
-          </>
+          </Box>
         );
       
       default:
@@ -596,182 +419,119 @@ const SignupPage: React.FC = () => {
     }
   };
 
-  // Regular user form
-  const renderUserForm = () => (
-    <>
-      {/* Username Field */}
-      <TextField
-        fullWidth
-        label="Username"
-        name="username"
-        variant="outlined"
-        required
-        value={formData.username}
-        onChange={handleChange}
-        className="mb-4"
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <Person />
-            </InputAdornment>
-          ),
-        }}
-      />
-
-      {/* Email Field */}
-      <TextField
-        fullWidth
-        label="Email"
-        name="email"
-        variant="outlined"
-        type="email"
-        required
-        value={formData.email}
-        onChange={handleChange}
-        className="mb-4"
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <Email />
-            </InputAdornment>
-          ),
-        }}
-      />
-
-      {/* Password Field */}
-      <TextField
-        fullWidth
-        label="Password"
-        name="password"
-        variant="outlined"
-        type={showPassword ? "text" : "password"}
-        required
-        value={formData.password}
-        onChange={handleChange}
-        className="mb-4"
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <Lock />
-            </InputAdornment>
-          ),
-          endAdornment: (
-            <InputAdornment position="end">
-              <IconButton onClick={() => setShowPassword(!showPassword)}>
-                {showPassword ? <VisibilityOff /> : <Visibility />}
-              </IconButton>
-            </InputAdornment>
-          ),
-        }}
-      />
-
-      {/* Confirm Password Field */}
-      <TextField
-        fullWidth
-        label="Confirm Password"
-        name="confirmPassword"
-        variant="outlined"
-        type="password"
-        required
-        value={formData.confirmPassword}
-        onChange={handleChange}
-        className="mb-4"
-      />
-
-      {/* Submit Button */}
-      <Button
-        fullWidth
-        variant="contained"
-        className="bg-amber-600 hover:bg-amber-700 text-white py-3 mt-4"
-        sx={{ backgroundColor: "#d97706" }}
-        type="submit"
-        disabled={loading}
-      >
-        {loading ? (
-          <CircularProgress size={24} sx={{ color: "white" }} />
-        ) : (
-          "Sign Up"
-        )}
-      </Button>
-    </>
-  );
-
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100 px-4 py-8">
-      <Paper elevation={3} className="w-full max-w-4xl rounded-lg overflow-hidden">
-        <Grid container>
-          {/* Image Section */}
-          <Grid item xs={12} md={6} className="hidden md:block">
-            <img 
-              src={spaghetti} 
-              alt="Food" 
-              className="w-full h-full object-cover"
-              style={{ minHeight: '100%' }}
-            />
-          </Grid>
-
-          {/* Form Section */}
-          <Grid item xs={12} md={6}>
-            <Box className="p-6 md:p-8">
-              <Typography variant="h4" className="font-bold text-gray-800 text-center mb-2">
-                Join PerfectRecipe
-              </Typography>
-              
-              <Typography className="text-gray-500 text-center mb-6">
-                Create an account to explore and share recipes!
-              </Typography>
-
-              {/* User Type Selection */}
-              <FormControl fullWidth variant="outlined" className="mb-4 mt-4">
-                <InputLabel id="user-type-label">Account Type</InputLabel>
-                <Select
-                  labelId="user-type-label"
-                  value={userType}
-                  onChange={handleUserTypeChange}
-                  label="Account Type"
-                >
-                  <MenuItem value="user">Regular User</MenuItem>
-                  <MenuItem value="chef">Professional Chef</MenuItem>
-                </Select>
-              </FormControl>
-
-              {userType === "chef" && (
-                <Box className="mb-4">
-                  <Stepper activeStep={activeChefStep} alternativeLabel>
-                    <Step>
-                      <StepLabel>Basic Info</StepLabel>
-                    </Step>
-                    <Step>
-                      <StepLabel>Experience</StepLabel>
-                    </Step>
-                    <Step>
-                      <StepLabel>Certifications</StepLabel>
-                    </Step>
-                    <Step>
-                      <StepLabel>Verification</StepLabel>
-                    </Step>
-                  </Stepper>
-                </Box>
-              )}
-
-              <Divider className="mb-4" />
-
-              <form className="space-y-4" onSubmit={handleSubmit}>
-                {userType === "chef" ? renderChefSteps() : renderUserForm()}
-              </form>
-
-              {/* Footer Links */}
-              <Typography className="mt-6 text-center text-gray-500">
-                Already have an account?{" "}
-                <Link to="/login" className="text-amber-600 font-semibold">
-                  Login
-                </Link>
-              </Typography>
+    <Box sx={{ maxWidth: 600, mx: 'auto', p: 3 }}>
+      <Typography variant="h4" component="h1" gutterBottom textAlign="center">
+        Create an Account
+      </Typography>
+      <Paper elevation={3} sx={{ p: 3, mt: 3 }}>
+        <FormControl fullWidth margin="normal">
+          <InputLabel>Account Type</InputLabel>
+          <Select
+            value={userType}
+            onChange={handleUserTypeChange}
+            label="Account Type"
+          >
+            <MenuItem value="user">Regular User</MenuItem>
+            <MenuItem value="chef">Professional Chef</MenuItem>
+          </Select>
+        </FormControl>
+        
+        <form onSubmit={handleSubmit}>
+          {userType === "user" ? (
+            // Regular User Signup Form
+            <Box>
+              <TextField
+                fullWidth
+                label="Username"
+                name="username"
+                value={formData.username}
+                onChange={handleChange}
+                margin="normal"
+                required
+              />
+              <TextField
+                fullWidth
+                label="Email"
+                name="email"
+                type="email"
+                value={formData.email}
+                onChange={handleChange}
+                margin="normal"
+                required
+              />
+              <TextField
+                fullWidth
+                label="Password"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                value={formData.password}
+                onChange={handleChange}
+                margin="normal"
+                required
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        onClick={() => setShowPassword(!showPassword)}
+                        edge="end"
+                      >
+                        {showPassword ? <VisibilityOff /> : <Visibility />}
+                      </IconButton>
+                    </InputAdornment>
+                  )
+                }}
+              />
+              <TextField
+                fullWidth
+                label="Confirm Password"
+                name="confirmPassword"
+                type={showPassword ? "text" : "password"}
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                margin="normal"
+                required
+              />
+              <Button 
+                fullWidth 
+                type="submit" 
+                variant="contained" 
+                color="primary" 
+                sx={{ mt: 2 }}
+                disabled={loading}
+              >
+                {loading ? "Processing..." : "Sign Up"}
+              </Button>
             </Box>
-          </Grid>
-        </Grid>
+          ) : (
+            // Chef Signup Form with Stepper
+            <Box sx={{ mt: 2 }}>
+              <Stepper activeStep={activeChefStep} alternativeLabel sx={{ mb: 3 }}>
+                <Step>
+                  <StepLabel>Basic Info</StepLabel>
+                </Step>
+                <Step>
+                  <StepLabel>Experience</StepLabel>
+                </Step>
+                <Step>
+                  <StepLabel>Certifications</StepLabel>
+                </Step>
+                <Step>
+                  <StepLabel>Verification</StepLabel>
+                </Step>
+              </Stepper>
+              {renderChefStep()}
+            </Box>
+          )}
+        </form>
+        
+        <Box sx={{ mt: 2, textAlign: 'center' }}>
+          <Typography variant="body2">
+            Already have an account? <Link to="/login" className='text-amber-600'>Login</Link>
+          </Typography>
+        </Box>
       </Paper>
-    </div>
+    </Box>
   );
 };
 

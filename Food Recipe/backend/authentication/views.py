@@ -22,7 +22,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, BasePermission
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.generics import GenericAPIView
-from rest_framework import status
+from rest_framework import status, serializers
 from rest_framework.response import Response
 from django.urls import reverse
 from django.shortcuts import redirect
@@ -32,8 +32,9 @@ from django.utils import timezone
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from .utils import send_notification
 from django.conf import settings
-from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.parsers import FormParser, MultiPartParser, JSONParser
 import logging
+import json
 
 from .models import CustomUser, UserProfile, UserFollowing, ChefProfile
 
@@ -62,8 +63,101 @@ class IsVerifiedChef(BasePermission):
 class MyTokenObtainPairView(TokenObtainPairView):
     serializer_class = MyTokenObtainPairSerializer
     permission_classes = [AllowAny]
+# views.py modification - Modify the SignUpView class
 
 class SignUpView(GenericAPIView):
+    serializer_class = SignUpSerializer
+    permission_classes = [AllowAny]
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        logger.info("Signup request received")
+        if serializer.is_valid():
+            logger.info("User data is valid, saving user...")
+            user = serializer.save()
+
+            try:
+                pass  # Add your code here
+            except Exception as e:
+                logger.error(f"An error occurred: {e}")
+                # For regular users, set is_verified to True automatically
+                if user.role == 'USER':
+                    user.is_verified = True
+                    user.save()
+                    
+                    # Send welcome email instead of verification
+                    try:
+                        context = {
+                            "user": user,
+                            "login_url": request.build_absolute_uri('/login')
+                        }
+                        
+                        template_path = "Account_verify/welcome_email.html"
+                        subject = "Welcome to PerfectRecipe!"
+                        send_notification(user, subject, template_path, context)
+                        email_status = "welcome_email_sent"
+                    except Exception as email_error:
+                        logger.error(f"Failed to send welcome email: {email_error}")
+                        email_status = "welcome_email_failed"
+                        
+                    return Response(
+                        {
+                            "message": "Registration successful.",
+                            "details": f"Account created and verified, {email_status}. You can now log in.",
+                            "user_id": user.id,
+                            "is_verified": True
+                        },
+                        status=status.HTTP_201_CREATED
+                    )
+                else:
+                    # For chefs, keep the original verification flow
+                    # Generate verification token and link
+                    uid = urlsafe_base64_encode(force_bytes(user.pk))
+                    token = PasswordResetTokenGenerator().make_token(user)
+                    verification_link = request.build_absolute_uri(
+                        reverse('verify-email', kwargs={'uidb64': uid, 'token': token})
+                    )
+                    
+                    context = {
+                        "user": user,
+                        "verification_link": verification_link
+                    }
+
+                    # Try to send the verification email
+                    try:
+                        # Create the message as a string
+                        template_path = "Account_verify/verification_email.html"
+                        subject = "Verify your Account"
+
+                        # Send verification email
+                        send_notification(user, subject, template_path, context)
+                    except Exception as email_error:
+                        # Log email sending error but don't fail the signup
+                        logger.error(f"Failed to send verification email: {email_error}")
+                        # You can add these details to the response if desired
+                        email_status = "verification_email_failed"
+                    else:
+                        email_status = "verification_email_sent"
+
+                    return Response(
+                        {
+                            "message": "Chef registration successful.",
+                            "details": f"Account created, {email_status}. Please check your email to verify your account or contact support if you don't receive it.",
+                            "user_id": user.id
+                        },
+                        status=status.HTTP_201_CREATED
+                    )
+             
+            except Exception as e:
+                logger.error(f"Error in signup: {e}")
+                return Response(
+                    {"message": f"Registration failed: {str(e)}"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
+        return Response(
+                serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST
+            )
     serializer_class = SignUpSerializer
     permission_classes = [AllowAny]
     def post(self, request, *args, **kwargs):
@@ -86,15 +180,28 @@ class SignUpView(GenericAPIView):
                     "verification_link": verification_link
                 }
 
-                # Create the message as a string
-                template_path = "Account_verify/verification_email.html"
-                subject = "Verify your Account"
+                # Try to send the verification email
+                try:
+                    # Create the message as a string
+                    template_path = "Account_verify/verification_email.html"
+                    subject = "Verify your Account"
 
-                # Send verification email
-                send_notification(user, subject, template_path, context)
+                    # Send verification email
+                    send_notification(user, subject, template_path, context)
+                except Exception as email_error:
+                    # Log email sending error but don't fail the signup
+                    logger.error(f"Failed to send verification email: {email_error}")
+                    # You can add these details to the response if desired
+                    email_status = "verification_email_failed"
+                else:
+                    email_status = "verification_email_sent"
 
                 return Response(
-                    {"message": "Registration successful. Please check your email to verify your account."},
+                    {
+                        "message": "Registration successful.",
+                        "details": f"Account created, {email_status}. Please check your email to verify your account or contact support if you don't receive it.",
+                        "user_id": user.id
+                    },
                     status=status.HTTP_201_CREATED
                 )
              
@@ -109,72 +216,73 @@ class SignUpView(GenericAPIView):
                 serializer.errors,
                 status=status.HTTP_400_BAD_REQUEST
             )
-
+# Enhanced ChefSignUpView
 class ChefSignUpView(GenericAPIView):
     serializer_class = ChefSignUpSerializer
     permission_classes = [AllowAny]
     parser_classes = [MultiPartParser, FormParser]
-    
+
     def post(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        if serializer.is_valid():
-            chef_profile = serializer.save()
-            user = chef_profile.user
-            
-            try:
+        try:
+            logger.info("Chef signup request received")
+            serializer = self.get_serializer(data=request.data)
+            if serializer.is_valid():
+                chef_profile = serializer.save()
+                user = chef_profile.user
+
                 # Generate verification token and link
                 uid = urlsafe_base64_encode(force_bytes(user.pk))
                 token = PasswordResetTokenGenerator().make_token(user)
                 verification_link = request.build_absolute_uri(
                     reverse('verify-email', kwargs={'uidb64': uid, 'token': token})
                 )
-                
+
                 context = {
                     "user": user,
                     "verification_link": verification_link,
-                    "chef_application": True  # Flag for chef-specific email template
+                    "chef_application": True,
                 }
 
-                # Create the message as a string
-                template_path = "Account_verify/chef_verification_email.html"
-                subject = "Verify your Chef Account"
-
                 # Send verification email
+                template_path = "Account_verify/verification_email.html"
+                subject = "Verify your Chef Account"
                 send_notification(user, subject, template_path, context)
-                
-                # Notify admins about new chef application
-                admin_users = CustomUser.objects.filter(is_staff=True)
-                for admin in admin_users:
-                    admin_context = {
-                        "admin": admin,
-                        "chef": user,
-                        "chef_profile": chef_profile,
-                        "admin_link": request.build_absolute_uri(f'/admin/app/chefprofile/{chef_profile.id}/change/')
-                    }
-                    
-                    admin_template_path = "Chef_notifications/new_chef_application.html"
-                    admin_subject = f"New Chef Application: {user.username}"
-                    send_notification(admin, admin_subject, admin_template_path, admin_context)
+
+                logger.info(f"Chef registration successful for user: {user.email}")
 
                 return Response(
                     {
                         "message": "Chef registration successful. Your application is under review. Please check your email to verify your account.",
-                        "chef_id": chef_profile.id
+                        "chef_id": chef_profile.id,
                     },
-                    status=status.HTTP_201_CREATED
+                    status=status.HTTP_201_CREATED,
                 )
-             
-            except Exception as e:
-                logger.error(f"Error in chef signup: {e}")
-                return Response(
-                    {"message": f"Registration failed: {str(e)}"},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
-            
-        return Response(
-                serializer.errors,
-                status=status.HTTP_400_BAD_REQUEST
+            else:
+                logger.warning(f"Chef registration validation failed: {serializer.errors}")
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            logger.error(f"Unhandled exception in chef signup: {str(e)}", exc_info=True)
+            return Response(
+                {"message": "An unexpected error occurred during registration."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+            
+class ListAllUsersView(ListAPIView):
+    queryset = CustomUser.objects.all().order_by("id")
+    serializer_class = UserSerializer
+    permission_classes = [AllowAny]
+
+    # def get_queryset(self):
+    #     return self.queryset.exclude(id=self.request.user.id).order_by("id")
+    
+class ListAllChefsView(ListAPIView):
+    serializer_class = ChefProfileDetailSerializer  # Use a serializer that includes chef-related details
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        # Filter users with the role of 'CHEF' and ensure they have a related chef profile
+        return ChefProfile.objects.select_related('user').filter(user__role='CHEF').order_by("user__id")
 
 class GetUserView(RetrieveAPIView):
     queryset = CustomUser.objects.all()

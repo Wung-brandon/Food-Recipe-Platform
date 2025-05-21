@@ -7,8 +7,39 @@ from django.contrib.auth.password_validation import validate_password
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .utils import send_notification
 from .models import CustomUser, UserProfile, UserFollowing, ChefProfile
+from django.contrib.auth import authenticate
+import logging
+from django.core.exceptions import ObjectDoesNotExist
+import json
+from django.db import transaction
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        # Check if user exists and is verified before creating token
+        email = attrs.get('email', '')
+        password = attrs.get('password', '')
+        
+        user = authenticate(email=email, password=password)
+        
+        if not user:
+            raise serializers.ValidationError(
+                {'detail': 'Invalid credentials.'}
+            )
+            
+        # Check if user is verified (only applies to chef accounts)
+        if user.role == 'CHEF' and not user.is_verified:
+            raise serializers.ValidationError(
+                {'detail': 'Please verify your email before logging in.'}
+            )
+        
+        # Get the token
+        data = super().validate(attrs)
+        
+        return data
+    
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
@@ -16,18 +47,17 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         token["email"] = user.email
         token["is_verified"] = user.is_verified
         token["role"] = user.role
-        token["full_name"] = user.profile.full_name
-        token["bio"] = user.profile.bio
-        token["followers_count"] = user.profile.followers_count
-        token["following_count"] = user.profile.following_count
-        token["profile_picture"] = str(user.profile.profile_picture)
+        token["full_name"] = user.profile.full_name if hasattr(user, 'profile') else ""
+        token["bio"] = user.profile.bio if hasattr(user, 'profile') else ""
+        token["followers_count"] = user.profile.followers_count if hasattr(user, 'profile') else 0
+        token["following_count"] = user.profile.following_count if hasattr(user, 'profile') else 0
+        token["profile_picture"] = str(user.profile.profile_picture) if hasattr(user, 'profile') and user.profile.profile_picture else ""
         
         # Add chef verification status if user is a chef
         if user.role == 'CHEF' and hasattr(user, 'chef_profile'):
             token["chef_verification_status"] = user.chef_profile.verification_status
             
         return token
-
 class UserSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(required=True)
     password = serializers.CharField(write_only=True, min_length=6, required=True)
@@ -44,6 +74,7 @@ class ChefProfileSerializer(serializers.ModelSerializer):
         model = ChefProfile
         fields = [
             'id', 
+            'profile_picture',
             'verification_status', 
             'years_of_experience', 
             'specialization',
@@ -55,7 +86,7 @@ class ChefProfileSerializer(serializers.ModelSerializer):
             'has_accepted_terms',
             'verification_date'
         ]
-        read_only_fields = ['verification_status', 'verification_date', 'rejection_reason']
+        read_only_fields = ['id', 'verification_status', 'verification_date', 'rejection_reason']
 
 class SignUpSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=6, required=True, validators=[validate_password])
@@ -83,8 +114,18 @@ class SignUpSerializer(serializers.ModelSerializer):
         
         return user
 
+# Enhanced Backend ChefSignUpSerializer
 class ChefSignUpSerializer(serializers.Serializer):
-    user = SignUpSerializer()
+    # User fields - keeping them for backward compatibility
+    email = serializers.EmailField(required=False)
+    password = serializers.CharField(write_only=True, min_length=6, required=False)
+    confirm_password = serializers.CharField(write_only=True, min_length=6, required=False)
+    username = serializers.CharField(required=False)
+    
+    # User as JSON field
+    user = serializers.JSONField(required=False)
+    
+    # Chef profile fields
     years_of_experience = serializers.IntegerField(min_value=0)
     specialization = serializers.ChoiceField(choices=ChefProfile.SPECIALIZATION_CHOICES)
     certification = serializers.FileField(required=True)
@@ -99,23 +140,109 @@ class ChefSignUpSerializer(serializers.Serializer):
             raise serializers.ValidationError("You must accept the terms and conditions to register as a chef.")
         return value
     
+    def validate(self, data):
+        # Get user data either from top-level fields or from user field
+        user_data = {}
+        
+        # Check if user field is provided
+        if 'user' in data:
+            # Parse user JSON data if it's a string
+            if isinstance(data['user'], str):
+                try:
+                    user_data = json.loads(data['user'])
+                except json.JSONDecodeError:
+                    raise serializers.ValidationError({"user": "Invalid JSON format for user data"})
+            else:
+                user_data = data['user']
+                
+            # Validate required user fields
+            required_fields = ['email', 'password', 'confirm_password', 'username']
+            for field in required_fields:
+                if field not in user_data or not user_data[field]:
+                    raise serializers.ValidationError({f"user.{field}": f"{field} is required"})
+        else:
+            # Check for top-level user fields
+            for field in ['email', 'password', 'confirm_password', 'username']:
+                if field in data:
+                    user_data[field] = data[field]
+            
+            # Validate all required user fields are present
+            if len(user_data) > 0 and len(user_data) < 4:
+                missing_fields = [field for field in ['email', 'password', 'confirm_password', 'username'] 
+                                 if field not in user_data]
+                raise serializers.ValidationError({field: "This field is required" for field in missing_fields})
+        
+        # If we have no user data at all, raise validation error
+        if not user_data:
+            raise serializers.ValidationError({
+                "user": "User data is required. Provide either separate fields (email, password, confirm_password, username) or a 'user' JSON object."
+            })
+            
+        # Password validation
+        if 'password' in user_data and 'confirm_password' in user_data:
+            if user_data['password'] != user_data['confirm_password']:
+                raise serializers.ValidationError({"confirm_password": ["Passwords do not match."]})
+        
+        # Check if email already exists
+        if 'email' in user_data:
+            email = user_data['email']
+            if CustomUser.objects.filter(email=email).exists():
+                raise serializers.ValidationError({"email": ["A user with this email already exists."]})
+        
+        # Store validated user data for create method
+        data['validated_user_data'] = user_data
+        
+        return data
+    
     def create(self, validated_data):
-        user_data = validated_data.pop('user')
-        user_data['role'] = 'CHEF'  # Force role to be CHEF
-        
-        # Create user with chef role
-        user_serializer = SignUpSerializer(data=user_data)
-        user_serializer.is_valid(raise_exception=True)
-        user = user_serializer.save()
-        
-        # Create chef profile
-        chef_profile = ChefProfile.objects.create(
-            user=user,
-            **validated_data
-        )
-        
-        return chef_profile
-
+        try:
+            # Extract user data
+            user_data = validated_data.pop('validated_user_data')
+            
+            # Remove original user field and other user fields if they exist
+            validated_data.pop('user', None)
+            for field in ['email', 'password', 'confirm_password', 'username']:
+                validated_data.pop(field, None)
+            
+            # Force role to be CHEF
+            user_data['role'] = 'CHEF'
+            
+            logger.info(f"Creating chef user: {user_data.get('email')}")
+            
+            # Begin a transaction to ensure consistency
+            with transaction.atomic():
+                # Create user
+                user = CustomUser.objects.create(
+                    email=user_data['email'],
+                    username=user_data['username'],
+                    role=user_data['role']
+                )
+                user.set_password(user_data['password'])
+                user.save()
+                
+                # The signal might have already created a ChefProfile, so get or create
+                chef_profile, created = ChefProfile.objects.get_or_create(user=user)
+                
+                # Update the chef profile with the provided data regardless of whether it was just created
+                for key, value in validated_data.items():
+                    setattr(chef_profile, key, value)
+                chef_profile.save()
+            
+            logger.info(f"Chef registration successful: {user.email}")
+            return chef_profile
+            
+        except Exception as e:
+            # Log the error
+            logger.error(f"Chef registration failed: {str(e)}")
+            # If any error occurs during user creation, make sure we don't leave orphaned records
+            if 'user' in locals() and user is not None:
+                try:
+                    user.delete()
+                except Exception as delete_error:
+                    logger.error(f"Failed to clean up user after error: {str(delete_error)}")
+            
+            # Re-raise the exception to be handled by the view
+            raise
 class ResetPasswordSerializer(serializers.Serializer):
     """
     Reset Password Serializer.
@@ -196,6 +323,7 @@ class ChefProfileDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChefProfile
         fields = [
+            'id',
             'user',
             'profile',
             'verification_status',
