@@ -1,265 +1,173 @@
 import React, { useState, useEffect } from 'react';
 import {
   Grid,
-  Paper,
   Typography,
-  Card,
-  CardContent,
   Box,
   Button,
-  Tabs,
-  Tab,
-  TextField,
+  LinearProgress,
+  Paper,
   InputAdornment,
-  IconButton,
+  TextField,
   Chip,
   Menu,
   MenuItem,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  LinearProgress,
-  Tooltip,
   FormControl,
   Select,
   SelectChangeEvent,
-  CardMedia,
-  CardActionArea,
-  CardActions
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
 } from '@mui/material';
-import {
-  Search as SearchIcon,
-  FilterList as FilterListIcon,
-  Sort as SortIcon,
-  MoreVert as MoreVertIcon,
-  Edit as EditIcon,
-  DeleteOutline as DeleteOutlineIcon,
-  Visibility as VisibilityIcon,
-  ThumbUp as ThumbUpIcon,
-  Comment as CommentIcon,
-  Add as AddIcon,
-  Dashboard as DashboardIcon,
-  AddCircle as AddCircleIcon,
-  MenuBook as MenuBookIcon,
-  People as PeopleIcon,
-  Drafts as DraftsIcon,
-  Analytics as AnalyticsIcon,
-  Person as PersonIcon,
-  Settings as SettingsIcon
-} from '@mui/icons-material';
-
+import { Search as SearchIcon, FilterList as FilterListIcon, Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { useAuth } from '../../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../../Layout/DashboardLayout';
+import RecipeCard from '../../../components/RecipeCard';
+import { RecipeData } from '../../../types/Recipe';
+import axios from 'axios';
+import { refreshAccessToken } from '../../../utils/AuthHelper';
+import { toast } from 'react-toastify';
 
-interface Recipe {
-  id: number;
-  title: string;
-  description: string;
-  image: string;
-  category: string;
-  difficulty: string;
-  prepTime: string;
-  published: boolean;
-  dateCreated: string;
-  views: number;
-  likes: number;
-  comments: number;
-}
+const API_BASE_URL = 'http://localhost:8000';
+const API_ENDPOINTS = {
+  recipes: `${API_BASE_URL}/api/recipes/`,
+  categories: `${API_BASE_URL}/api/categories/`,
+};
 
 const ChefRecipes: React.FC = () => {
-  const { user } = useAuth();
+  const { token, user, logout } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState<boolean>(true);
-  const [recipes, setRecipes] = useState<Recipe[]>([]);
-  const [filteredRecipes, setFilteredRecipes] = useState<Recipe[]>([]);
-  const [tabValue, setTabValue] = useState<number>(0);
+  const [recipes, setRecipes] = useState<RecipeData[]>([]);
+  const [filteredRecipes, setFilteredRecipes] = useState<RecipeData[]>([]);
+  const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [sortAnchorEl, setSortAnchorEl] = useState<null | HTMLElement>(null);
+  const [filterByCategory, setFilterByCategory] = useState<string>('');
   const [filterAnchorEl, setFilterAnchorEl] = useState<null | HTMLElement>(null);
-  const [selectedRecipeId, setSelectedRecipeId] = useState<number | null>(null);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState<boolean>(false);
-  const [sortBy, setSortBy] = useState<string>('newest');
-  const [filterByCategory, setFilterByCategory] = useState<string>('all');
-
-  const sortOpen = Boolean(sortAnchorEl);
   const filterOpen = Boolean(filterAnchorEl);
 
+  // For delete dialog
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [recipeToDelete, setRecipeToDelete] = useState<null | number>(null);
 
-  const sampleRecipes: Recipe[] = [
-    {
-      id: 1,
-      title: 'Homemade Margherita Pizza',
-      description: 'Classic Italian pizza with fresh mozzarella, tomatoes, and basil',
-      image: '/api/placeholder/300/200',
-      category: 'Italian',
-      difficulty: 'Medium',
-      prepTime: '45 minutes',
-      published: true,
-      dateCreated: '2023-06-12',
-      views: 1245,
-      likes: 98,
-      comments: 23
-    },
-    {
-      id: 2,
-      title: 'Chocolate Soufflé',
-      description: 'Light and airy chocolate dessert that will impress your guests',
-      image: '/api/placeholder/300/200',
-      category: 'Dessert',
-      difficulty: 'Hard',
-      prepTime: '1 hour',
-      published: true,
-      dateCreated: '2023-07-15',
-      views: 982,
-      likes: 76,
-      comments: 15
-    },
-    {
-      id: 3,
-      title: 'Beef Wellington',
-      description: 'Tender beef fillet wrapped in mushroom duxelles and puff pastry',
-      image: '/api/placeholder/300/200',
-      category: 'British',
-      difficulty: 'Hard',
-      prepTime: '2 hours',
-      published: true,
-      dateCreated: '2023-08-03',
-      views: 763,
-      likes: 45,
-      comments: 8
-    },
-    {
-      id: 4,
-      title: 'Thai Green Curry',
-      description: 'Spicy and aromatic curry with coconut milk and fresh herbs',
-      image: '/api/placeholder/300/200',
-      category: 'Asian',
-      difficulty: 'Medium',
-      prepTime: '40 minutes',
-      published: true,
-      dateCreated: '2023-09-22',
-      views: 641,
-      likes: 39,
-      comments: 5
-    },
-    {
-      id: 5,
-      title: 'Avocado Toast with Poached Eggs',
-      description: 'Healthy breakfast option with creamy avocado and perfect poached eggs',
-      image: '/api/placeholder/300/200',
-      category: 'Breakfast',
-      difficulty: 'Easy',
-      prepTime: '20 minutes',
-      published: false,
-      dateCreated: '2023-10-05',
-      views: 0,
-      likes: 0,
-      comments: 0
-    },
-    {
-      id: 6,
-      title: 'Classic French Onion Soup',
-      description: 'Rich beef broth with caramelized onions and melted gruyère cheese',
-      image: '/api/placeholder/300/200',
-      category: 'French',
-      difficulty: 'Medium',
-      prepTime: '1 hour 30 minutes',
-      published: false,
-      dateCreated: '2023-10-18',
-      views: 0,
-      likes: 0,
-      comments: 0
+  // Fetch categories
+  const fetchCategories = async () => {
+    try {
+      const response = await axios.get(API_ENDPOINTS.categories);
+      setCategories(response.data.results || response.data);
+    } catch (error) {
+      setCategories([
+        { id: 1, name: 'Dinner' },
+        { id: 2, name: 'Lunch' },
+        { id: 3, name: 'Breakfast' },
+        { id: 4, name: 'Traditional African' },
+        { id: 5, name: 'Vegetarian' },
+        { id: 6, name: 'Appetizer' }
+      ]);
     }
-  ];
+  };
 
-  const categories = ['All', 'Italian', 'Dessert', 'British', 'Asian', 'Breakfast', 'French'];
+  // Fetch recipes for the logged-in chef
+  const fetchRecipes = async () => {
+    setLoading(true);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        // In a real application, you would fetch this data from your API
-        // For now, simulating API call with setTimeout
-        setTimeout(() => {
-          setRecipes(sampleRecipes);
-          setFilteredRecipes(sampleRecipes);
-          setLoading(false);
-        }, 1000);
-      } catch (error) {
-        console.error('Error fetching recipes:', error);
-        setLoading(false);
-      }
+    const getRecipes = async (authToken: string | null) => {
+      const params: any = {
+        user: user?.id,
+      };
+      if (searchQuery) params.search = searchQuery;
+      if (filterByCategory) params.category = filterByCategory;
+
+      return await axios.get(API_ENDPOINTS.recipes, {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+        params,
+        validateStatus: () => true,
+      });
     };
 
-    fetchData();
-  }, []);
+    try {
+      let currentToken = token;
+      let response = await getRecipes(currentToken);
+
+      if (response && response.status === 401) {
+        const newToken = await refreshAccessToken();
+        if (newToken) {
+          currentToken = newToken;
+          response = await getRecipes(currentToken);
+        } else {
+          toast.error('Session expired. Please log in again.');
+          logout();
+          navigate('/login');
+          return;
+        }
+      }
+
+      if (response && response.status === 200) {
+        const data = (response.data.results || response.data).map((recipe: any) => ({
+          id: recipe.id,
+          title: recipe.title,
+          category: recipe.category?.name || recipe.category || '',
+          imageUrl: recipe.image || '/api/placeholder/300/200',
+          cookTime: recipe.cooking_time || 0,
+          difficulty: recipe.difficulty || '',
+          rating: recipe.rating || 0,
+          reviewCount: recipe.review_count || 0,
+          author: {
+            name: recipe.chef_name || user?.username || 'Chef',
+            avatarUrl: recipe.chef_avatar || '',
+          },
+          isSaved: false,
+          isLiked: false,
+          likeCount: recipe.likes || 0,
+          createdAt: recipe.created_at || '',
+        }));
+        setRecipes(data);
+        setFilteredRecipes(data);
+      } else {
+        setRecipes([]);
+        setFilteredRecipes([]);
+        if (response && response.status !== 200) {
+          toast.error('Failed to fetch recipes.');
+        }
+      }
+    } catch (error) {
+      setRecipes([]);
+      setFilteredRecipes([]);
+      toast.error('Network error. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    filterRecipes();
-  }, [searchQuery, sortBy, filterByCategory, tabValue, recipes]);
+    fetchCategories();
+    fetchRecipes();
+    // eslint-disable-next-line
+  }, []);
 
-  const filterRecipes = () => {
+  // Filtering logic
+  useEffect(() => {
     let filtered = [...recipes];
-
-    // Filter by tab (published or drafts)
-    if (tabValue === 0) {
-      filtered = filtered.filter(recipe => recipe.published);
-    } else {
-      filtered = filtered.filter(recipe => !recipe.published);
-    }
-
-    // Filter by search query
     if (searchQuery) {
       filtered = filtered.filter(recipe =>
-        recipe.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        recipe.description.toLowerCase().includes(searchQuery.toLowerCase())
+        recipe.title.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
-
-    // Filter by category
-    if (filterByCategory && filterByCategory !== 'all') {
+    if (filterByCategory) {
       filtered = filtered.filter(recipe =>
-        recipe.category.toLowerCase() === filterByCategory.toLowerCase()
+        recipe.category === filterByCategory
       );
     }
-
-    // Sort recipes
-    switch (sortBy) {
-      case 'newest':
-        filtered.sort((a, b) => new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime());
-        break;
-      case 'oldest':
-        filtered.sort((a, b) => new Date(a.dateCreated).getTime() - new Date(b.dateCreated).getTime());
-        break;
-      case 'most-viewed':
-        filtered.sort((a, b) => b.views - a.views);
-        break;
-      case 'most-liked':
-        filtered.sort((a, b) => b.likes - a.likes);
-        break;
-      default:
-        break;
-    }
-
     setFilteredRecipes(filtered);
-  };
-
-  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
-    setTabValue(newValue);
-  };
+  }, [searchQuery, filterByCategory, recipes]);
 
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(event.target.value);
-  };
-
-  const handleSortClick = (event: React.MouseEvent<HTMLElement>) => {
-    setSortAnchorEl(event.currentTarget);
-  };
-
-  const handleSortClose = () => {
-    setSortAnchorEl(null);
   };
 
   const handleFilterClick = (event: React.MouseEvent<HTMLElement>) => {
@@ -270,86 +178,97 @@ const ChefRecipes: React.FC = () => {
     setFilterAnchorEl(null);
   };
 
-  const handleSortChange = (option: string) => {
-    setSortBy(option);
-    handleSortClose();
-  };
-
   const handleFilterChange = (event: SelectChangeEvent) => {
     setFilterByCategory(event.target.value as string);
-  };
-
-  const handleRecipeMenuClick = (event: React.MouseEvent<HTMLElement>, recipeId: number) => {
-    event.stopPropagation();
-    setSelectedRecipeId(recipeId);
-  };
-
-  const handleDeleteDialogOpen = (event: React.MouseEvent<HTMLElement>, recipeId: number) => {
-    event.stopPropagation();
-    setSelectedRecipeId(recipeId);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleDeleteDialogClose = () => {
-    setDeleteDialogOpen(false);
-    setSelectedRecipeId(null);
-  };
-
-  const handleRecipeDelete = () => {
-    if (selectedRecipeId) {
-      setRecipes(recipes.filter(recipe => recipe.id !== selectedRecipeId));
-      setDeleteDialogOpen(false);
-      setSelectedRecipeId(null);
-    }
-  };
-
-  const handleRecipeEdit = (event: React.MouseEvent<HTMLElement>, recipeId: number) => {
-    event.stopPropagation();
-    // Navigate to edit recipe page
-    navigate(`/chef/create-recipe?edit=${recipeId}`);
-  };
-
-  const handleRecipeClick = (recipeId: number) => {
-    // Navigate to recipe details page
-    navigate(`/recipe/${recipeId}`);
+    handleFilterClose();
   };
 
   const handleCreateRecipe = () => {
     navigate('/dashboard/chef/create-recipe');
   };
 
-  // Render the component with the DashboardLayout
+  // View details handler
+const handleViewDetails = (slug: string) => {
+  navigate(`/recipes/${slug}`);
+};
+
+// Edit handler
+const handleEditRecipe = (slug: string) => {
+  navigate(`/dashboard/chef/edit-recipe/${slug}`);
+};
+
+// Delete handlers
+const handleDeleteClick = (slug: string) => {
+  setRecipeToDelete(slug);
+  setDeleteDialogOpen(true);
+};
+
+const handleDeleteConfirm = async () => {
+  if (!recipeToDelete) return;
+  setLoading(true);
+  try {
+    const currentToken = token;
+    let response = await axios.delete(`${API_ENDPOINTS.recipes}${recipeToDelete}/`, {
+      headers: { Authorization: `Bearer ${currentToken}` },
+      validateStatus: () => true,
+    });
+
+    // If 401, try refresh and retry once
+    if (response.status === 401) {
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        response = await axios.delete(`${API_ENDPOINTS.recipes}${recipeToDelete}/`, {
+          headers: { Authorization: `Bearer ${newToken}` },
+          validateStatus: () => true,
+        });
+      } else {
+        toast.error('Session expired. Please log in again.');
+        logout();
+        navigate('/login');
+        return;
+      }
+    }
+
+    if (response.status === 204) {
+      toast.success('Recipe deleted successfully!');
+      // setRecipes(recipes.filter(r => r.slug !== recipeToDelete));
+      // setFilteredRecipes(filteredRecipes.filter(r => r.slug !== recipeToDelete));
+      setRecipes((prev) => prev.filter((r) => r.id !== recipeToDelete));
+      setFilteredRecipes((prev) => prev.filter((r) => r.id !== recipeToDelete));
+    } else {
+      toast.error('Failed to delete recipe.');
+    }
+  } catch (error) {
+    toast.error('Network error. Please try again.');
+  } finally {
+    setDeleteDialogOpen(false);
+    setRecipeToDelete(null);
+    setLoading(false);
+  }
+};
+
+  const handleDeleteCancel = () => {
+    setDeleteDialogOpen(false);
+    setRecipeToDelete(null);
+  };
+
   return (
     <DashboardLayout title="My Recipes">
       <Box>
         <Paper sx={{ p: 3, borderRadius: 2, mb: 3 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h5" sx={{ fontWeight: 'medium' }}>My Recipes</Typography>
-            <Button 
-              variant="contained" 
-              startIcon={<AddIcon />} 
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
               onClick={handleCreateRecipe}
-              sx={{ 
-                bgcolor: '#d97706', 
+              sx={{
+                bgcolor: '#d97706',
                 '&:hover': { bgcolor: '#b45309' }
               }}
             >
               Create New Recipe
             </Button>
-          </Box>
-
-          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-            <Tabs 
-              value={tabValue} 
-              onChange={handleTabChange}
-              sx={{ 
-                '& .MuiTab-root.Mui-selected': { color: '#d97706' },
-                '& .MuiTabs-indicator': { backgroundColor: '#d97706' }
-              }}
-            >
-              <Tab label="Published" />
-              <Tab label="Drafts" />
-            </Tabs>
           </Box>
 
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 3, alignItems: 'center' }}>
@@ -391,37 +310,15 @@ const ChefRecipes: React.FC = () => {
                       value={filterByCategory}
                       onChange={handleFilterChange}
                     >
-                      <MenuItem value="all">All Categories</MenuItem>
-                      {categories.map((category, index) => (
-                        category.toLowerCase() !== 'all' && (
-                          <MenuItem key={index} value={category.toLowerCase()}>
-                            {category}
-                          </MenuItem>
-                        )
+                      <MenuItem value="">All Categories</MenuItem>
+                      {categories.map((category) => (
+                        <MenuItem key={category.id} value={category.name}>
+                          {category.name}
+                        </MenuItem>
                       ))}
                     </Select>
                   </FormControl>
                 </Box>
-              </Menu>
-
-              <Button
-                variant="outlined"
-                startIcon={<SortIcon />}
-                onClick={handleSortClick}
-                size="small"
-                sx={{ borderColor: '#d97706', color: '#d97706' }}
-              >
-                Sort
-              </Button>
-              <Menu
-                anchorEl={sortAnchorEl}
-                open={sortOpen}
-                onClose={handleSortClose}
-              >
-                <MenuItem onClick={() => handleSortChange('newest')}>Newest First</MenuItem>
-                <MenuItem onClick={() => handleSortChange('oldest')}>Oldest First</MenuItem>
-                <MenuItem onClick={() => handleSortChange('most-viewed')}>Most Viewed</MenuItem>
-                <MenuItem onClick={() => handleSortChange('most-liked')}>Most Liked</MenuItem>
               </Menu>
             </Box>
           </Box>
@@ -431,21 +328,21 @@ const ChefRecipes: React.FC = () => {
           ) : (
             <>
               {filteredRecipes.length === 0 ? (
-                <Box sx={{ 
-                  textAlign: 'center', 
-                  py: 5, 
-                  bgcolor: '#f9fafb', 
+                <Box sx={{
+                  textAlign: 'center',
+                  py: 5,
+                  bgcolor: '#f9fafb',
                   borderRadius: 2,
                   border: '1px dashed #d1d5db'
                 }}>
                   <Typography variant="h6" color="text.secondary" sx={{ mb: 2 }}>
-                    {searchQuery ? 'No recipes match your search.' : tabValue === 0 ? 'No published recipes yet.' : 'No drafts yet.'}
+                    {searchQuery ? 'No recipes match your search.' : 'No recipes yet.'}
                   </Typography>
-                  <Button 
-                    variant="contained" 
+                  <Button
+                    variant="contained"
                     onClick={handleCreateRecipe}
-                    sx={{ 
-                      bgcolor: '#d97706', 
+                    sx={{
+                      bgcolor: '#d97706',
                       '&:hover': { bgcolor: '#b45309' }
                     }}
                   >
@@ -456,115 +353,23 @@ const ChefRecipes: React.FC = () => {
                 <Grid container spacing={3}>
                   {filteredRecipes.map((recipe) => (
                     <Grid item xs={12} sm={6} md={4} key={recipe.id}>
-                      <Card sx={{ 
-                        height: '100%',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        transition: 'transform 0.2s',
-                        '&:hover': { transform: 'translateY(-4px)', boxShadow: 3 }
-                      }}>
-                        <CardActionArea onClick={() => handleRecipeClick(recipe.id)}>
-                          <CardMedia
-                            component="img"
-                            height="180"
-                            image={recipe.image}
-                            alt={recipe.title}
+                      <Box
+                        sx={{
+                          position: 'relative',
+                          cursor: 'pointer',
+                          '&:hover .recipe-actions': { opacity: 1 }
+                        }}
+                        onClick={() => handleViewDetails(recipe.id)}
+                      >
+                        <RecipeCard
+                          recipe={recipe}
+                          currentUserId={user?.id}
+                          onEdit={() => handleEditRecipe(recipe.id)}
+                          onDelete={() => handleDeleteClick(recipe.id)}
+                          dashboardMode={true}
                           />
-                          <CardContent sx={{ flexGrow: 1 }}>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                              <Typography variant="h6" component="div" sx={{ mb: 1 }}>
-                                {recipe.title}
-                              </Typography>
-                              <IconButton 
-                                size="small" 
-                                onClick={(e) => handleRecipeMenuClick(e, recipe.id)}
-                              >
-                                <MoreVertIcon />
-                              </IconButton>
-                            </Box>
-                            
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                              {recipe.description.length > 80 
-                                ? `${recipe.description.substring(0, 80)}...` 
-                                : recipe.description}
-                            </Typography>
-                            
-                            <Box sx={{ display: 'flex', mb: 1, gap: 1, flexWrap: 'wrap' }}>
-                              <Chip 
-                                label={recipe.category} 
-                                size="small" 
-                                sx={{ bgcolor: '#fef3c7', color: '#92400e' }}
-                              />
-                              <Chip 
-                                label={recipe.difficulty} 
-                                size="small" 
-                                sx={{ bgcolor: '#e0f2fe', color: '#075985' }}
-                              />
-                              <Chip 
-                                label={recipe.prepTime} 
-                                size="small" 
-                                sx={{ bgcolor: '#f1f5f9', color: '#475569' }}
-                              />
-                            </Box>
-                          </CardContent>
-                        </CardActionArea>
                         
-                        <CardActions sx={{ bgcolor: '#f8fafc', borderTop: '1px solid #f1f5f9', p: 2 }}>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                            <Box sx={{ display: 'flex' }}>
-                              {recipe.published && (
-                                <>
-                                  <Tooltip title="Views">
-                                    <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
-                                      <VisibilityIcon fontSize="small" sx={{ color: '#64748b', mr: 0.5 }} />
-                                      <Typography variant="body2">{recipe.views}</Typography>
-                                    </Box>
-                                  </Tooltip>
-                                  <Tooltip title="Likes">
-                                    <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
-                                      <ThumbUpIcon fontSize="small" sx={{ color: '#64748b', mr: 0.5 }} />
-                                      <Typography variant="body2">{recipe.likes}</Typography>
-                                    </Box>
-                                  </Tooltip>
-                                  <Tooltip title="Comments">
-                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                      <CommentIcon fontSize="small" sx={{ color: '#64748b', mr: 0.5 }} />
-                                      <Typography variant="body2">{recipe.comments}</Typography>
-                                    </Box>
-                                  </Tooltip>
-                                </>
-                              )}
-                              {!recipe.published && (
-                                <Chip 
-                                  label="Draft" 
-                                  size="small" 
-                                  sx={{ bgcolor: '#f1f5f9', color: '#64748b' }}
-                                />
-                              )}
-                            </Box>
-                            <Box>
-                              <Tooltip title="Edit">
-                                <IconButton 
-                                  size="small" 
-                                  onClick={(e) => handleRecipeEdit(e, recipe.id)}
-                                  sx={{ color: '#d97706' }}
-                                >
-                                  <EditIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                              <Tooltip title="Delete">
-                                <IconButton 
-                                  size="small" 
-                                  color="error"
-                                  onClick={(e) => handleDeleteDialogOpen(e, recipe.id)}
-                                >
-                                  <DeleteOutlineIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                            </Box>
-                          </Box>
-                        </CardActions>
-                      </Card>
+                      </Box>
                     </Grid>
                   ))}
                 </Grid>
@@ -572,23 +377,20 @@ const ChefRecipes: React.FC = () => {
             </>
           )}
         </Paper>
-
-        {/* Delete Confirmation Dialog */}
+        {/* Delete confirmation dialog */}
         <Dialog
           open={deleteDialogOpen}
-          onClose={handleDeleteDialogClose}
+          onClose={handleDeleteCancel}
         >
           <DialogTitle>Delete Recipe</DialogTitle>
           <DialogContent>
-            <Typography>
+            <DialogContentText>
               Are you sure you want to delete this recipe? This action cannot be undone.
-            </Typography>
+            </DialogContentText>
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleDeleteDialogClose} sx={{ color: '#64748b' }}>
-              Cancel
-            </Button>
-            <Button onClick={handleRecipeDelete} color="error" variant="contained">
+            <Button onClick={handleDeleteCancel}>Cancel</Button>
+            <Button onClick={handleDeleteConfirm} color="error" variant="contained">
               Delete
             </Button>
           </DialogActions>

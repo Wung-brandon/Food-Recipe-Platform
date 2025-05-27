@@ -34,16 +34,16 @@ class IngredientAdmin(admin.ModelAdmin):
     list_editable = ["amount"]
     
 class StepAdmin(admin.ModelAdmin):
-    list_display = ["recipe", "order", "description"]
-    list_editable = ["order"]
+    list_display = ["recipe", "description"]
+    
 class TipAdmin(admin.ModelAdmin):
     list_display = ["recipe", "description"]
     
 class CommentAdmin(admin.ModelAdmin):
-    list_display = ["user", "recipe", "text"]
-    
+    list_display = ["user", "username", "recipe", "text"]
+
 class RatingAdmin(admin.ModelAdmin):
-    list_display = ["user", "recipe", "value"]
+    list_display = ["user", "username", "recipe", "value"]
     list_editable = ["value"]
 
 class FavoriteRecipeAdmin(admin.ModelAdmin):

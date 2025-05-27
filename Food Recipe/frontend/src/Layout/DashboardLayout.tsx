@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 // Import icons
@@ -15,14 +15,24 @@ import {
 } from '@mui/icons-material';
 
 // Dashboard Layout with built-in navigation items
+// Define User and ChefProfile interfaces to match expected user shape
+interface ChefProfile {
+  id: string | number;
+  // add other properties as needed
+}
+
+interface User {
+  username?: string;
+  email?: string;
+  chef_profile?: ChefProfile;
+  // add other properties as needed
+}
+
 const DashboardLayout = ({ children, title }) => {
-  const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  const { id } = useParams()
   
   // Define notification interface
   interface Notification {
@@ -36,18 +46,8 @@ const DashboardLayout = ({ children, title }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-  
-  // Built-in navigation items for chef dashboard
-  const navItems = [
-    { icon: <DashboardIcon />, text: 'Dashboard', path: '/dashboard/chef' },
-    { icon: <MenuBookIcon />, text: 'My Recipes', path: '/dashboard/chef/recipe' },
-    { icon: <AddCircleIcon />, text: 'Create Recipe', path: '/dashboard/chef/create-recipe' },
-    { icon: <PeopleIcon />, text: 'Followers', path: '/dashboard/chef/followers' },
-    // { icon: <DraftsIcon />, text: 'Drafts', path: '/dashboard/chef/drafts' },
-    { icon: <AnalyticsIcon />, text: 'Analytics', path: '/dashboard/chef/analytics' },
-    { icon: <PersonIcon />, text: 'Profile', path: `/dashboard/chef/profile/${id}` },
-    { icon: <SettingsIcon />, text: 'Settings', path: '/dashboard/chef/settings' },
-  ];
+  const { user, isLoading, isAuthenticated, logout } = useAuth();
+  const { id } = useParams();
   
   // Fetch notifications on mount
   useEffect(() => {
@@ -59,6 +59,40 @@ const DashboardLayout = ({ children, title }) => {
     ];
     setNotifications(demoNotifications);
   }, []);
+
+  // Show loading while auth is initializing
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amber-500"></div>
+      </div>
+    );
+  }
+
+  // Redirect to login if not authenticated
+  if (!isAuthenticated || !user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // console.log("DashboardLayout user:", user); 
+  
+  // Get the chef profile ID - this is the key fix
+  const chefProfileId = user?.chef_profile?.id;
+  
+  // Built-in navigation items for chef dashboard
+  const navItems = [
+    { icon: <DashboardIcon />, text: 'Dashboard', path: '/dashboard/chef' },
+    { icon: <MenuBookIcon />, text: 'My Recipes', path: '/dashboard/chef/recipe' },
+    { icon: <AddCircleIcon />, text: 'Create Recipe', path: '/dashboard/chef/create-recipe' },
+    { icon: <PeopleIcon />, text: 'Followers', path: '/dashboard/chef/followers' },
+    { icon: <AnalyticsIcon />, text: 'Analytics', path: '/dashboard/chef/analytics' },
+    { 
+      icon: <PersonIcon />, 
+      text: 'Profile', 
+      path: chefProfileId ? `/dashboard/chef/profile/${chefProfileId}` : '/dashboard/chef/profile'
+    },
+    { icon: <SettingsIcon />, text: 'Settings', path: '/dashboard/chef/settings' },
+  ];
   
   const unreadNotificationsCount = notifications.filter(n => !n.read).length;
   
@@ -89,7 +123,6 @@ const DashboardLayout = ({ children, title }) => {
 
   // Function to check if a nav item is active - improved to be more specific
   const isActiveRoute = (path) => {
-    // Use exact matching instead of includes
     return location.pathname === path;
   };
 
@@ -222,7 +255,7 @@ const DashboardLayout = ({ children, title }) => {
                         <p className="text-xs text-gray-500 truncate">{user?.email || 'user@example.com'}</p>
                       </div>
                       <Link
-                        to="/dashboard/chef/profile"
+                        to={chefProfileId ? `/dashboard/chef/profile/${chefProfileId}` : '/dashboard/chef/profile'}
                         className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                         onClick={closeAllMenus}
                       >

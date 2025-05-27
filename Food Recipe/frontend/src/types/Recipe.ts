@@ -19,11 +19,11 @@ export interface RecipeData {
     createdAt?: string; // Optional if it's not always present
   }
   
-  interface Author {
-    id: string;
-    name: string;
-    avatar: string;
-  }
+  // interface Author {
+  //   id: string;
+  //   name: string;
+  //   avatar: string;
+  // }
   
   interface Ingredient {
     id: string;
@@ -37,23 +37,26 @@ export interface RecipeData {
     description: string;
   }
 export interface Recipe {
+  id: string;
+  title: string;
+  description: string;
+  image: string;
+  preparationTime: number;
+  cookingTime: number;
+  servings: number;
+  difficulty: string;
+  calories: number;
+  rating: number;
+  ratingCount: number;
+  author: {
     id: string;
-    title: string;
-    imageFile?: File | null; // Added imageFile property
-    description: string;
-    image: string;
-    preparationTime: number;
-    cookingTime: number;
-    servings: number;
-    difficulty: string;
-    calories: number;
-    rating: number;
-    ratingCount: number;
-    author: Author;
-    ingredients: Ingredient[];
-    steps: Step[];
-    tips: string[];
-    isFavorite: boolean;
-    category: string;
-    tags: string[];
-  }
+    name: string;
+    avatar: string;
+  };
+  ingredients: Ingredient[];
+  steps: Step[];
+  tips: string[];
+  isFavorite: boolean;
+  category: string;
+  tags: string[];
+}

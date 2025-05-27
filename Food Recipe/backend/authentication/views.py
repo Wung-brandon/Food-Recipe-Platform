@@ -336,41 +336,28 @@ class RetrieveUpdateChefProfileView(RetrieveUpdateDestroyAPIView):
     
     def get_queryset(self):
         return self.queryset.filter(user=self.request.user)
-    
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
-        
+
         # If the chef is already verified, limit which fields can be updated
         if instance.verification_status == 'VERIFIED':
             allowed_fields = ['years_of_experience', 'specialization']
-            for field in list(request.data.keys()):
-                if field not in allowed_fields:
-                    request.data.pop(field, None)
-                    
-        serializer = self.get_serializer(instance, data=request.data, partial=True)
+            # Build a new dict with only allowed fields
+            update_data = {field: request.data[field] for field in allowed_fields if field in request.data}
+        else:
+            update_data = request.data
+
+        serializer = self.get_serializer(instance, data=update_data, partial=True)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
-        
+
         # If updating chef profile resets verification status
         if instance.verification_status == 'VERIFIED' and any(field in request.data for field in ['certification', 'certification_number']):
             instance.verification_status = 'PENDING'
             instance.save()
-            
-            # Notify admins about updated chef profile
-            admin_users = CustomUser.objects.filter(is_staff=True)
-            for admin in admin_users:
-                admin_context = {
-                    "admin": admin,
-                    "chef": instance.user,
-                    "chef_profile": instance,
-                    "admin_link": request.build_absolute_uri(f'/admin/app/chefprofile/{instance.id}/change/')
-                }
-                
-                admin_template_path = "Chef_notifications/chef_profile_updated.html"
-                admin_subject = f"Chef Profile Updated: {instance.user.username}"
-                send_notification(admin, admin_subject, admin_template_path, admin_context)
-        
+
         return Response(serializer.data)
+    
 
 class ListAllVerifiedChefsView(ListAPIView):
     """API endpoint to get all verified chefs"""

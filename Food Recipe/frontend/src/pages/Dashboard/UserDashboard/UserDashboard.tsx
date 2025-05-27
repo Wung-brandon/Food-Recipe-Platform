@@ -26,7 +26,7 @@ import {
   Star as StarIcon,
   Schedule as ScheduleIcon
 } from '@mui/icons-material';
-import DashboardLayout from '../../../Layout/DashboardLayout';
+import UserDashboardLayout from '../../../Layout/UserDashboardLayout';
 import { useAuth } from '../../../context/AuthContext';
 import axios from 'axios';
 
@@ -187,7 +187,7 @@ const UserDashboard: React.FC = () => {
   );
 
   return (
-    <DashboardLayout title="User Dashboard">
+    <UserDashboardLayout title="User Dashboard">
       <Grid container spacing={3}>
         {/* Welcome section */}
         <Grid item xs={12}>
@@ -271,7 +271,7 @@ const UserDashboard: React.FC = () => {
           </Paper>
         </Grid>
       </Grid>
-    </DashboardLayout>
+    </UserDashboardLayout>
   );
 };
 

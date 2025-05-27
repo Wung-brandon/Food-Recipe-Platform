@@ -13,10 +13,15 @@ urlpatterns = [
     path('tags/', views.TagListCreateView.as_view(), name='tag-list'),
     path('tags/<slug:slug>/', views.TagDetailView.as_view(), name='tag-detail'),
     
+    # Ingredient endpoints
+    path('ingredients/', views.IngredientListCreateView.as_view(), name='ingredient-list'),
+    # path('ingredients/<slug:slug>/', views.IngredientDetailView.as_view(), name='ingredient-detail'),
+
     # Recipe endpoints
     path('recipes/', views.RecipeListCreateView.as_view(), name='recipe-list'),
-    path('recipes/<slug:slug>/', views.RecipeDetailView.as_view(), name='recipe-detail'),
-    
+    path('recipes/<str:id>/', views.RecipeDetailView.as_view(), name='recipe-detail'),
+    path('recipes/<str:recipe_id>/review/', views.RecipeReviewView.as_view(), name='recipe-review'),
+    path('recipes/<str:recipe_id>/comments/<str:comment_id>/reply/', views.CommentReplyView.as_view(), name='comment-reply'),
     # User recipes
     path('my-recipes/', views.UserRecipesView.as_view(), name='user-recipes'),
     path('my-favorites/', views.UserFavoritesView.as_view(), name='user-favorites'),

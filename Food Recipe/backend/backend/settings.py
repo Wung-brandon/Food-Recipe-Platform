@@ -63,6 +63,11 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = "backend.urls"
+REST_FRAMEWORK = {
+    'DEFAULT_PERMISSION_CLASSES': [
+    'rest_framework.permissions.AllowAny',
+],
+}
 
 AUTH_USER_MODEL = "authentication.CustomUser"
 

@@ -2,19 +2,21 @@ from rest_framework import generics, permissions, status, filters
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError, PermissionDenied
+from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from django.db.models import Avg, Count, Q
 from django_filters.rest_framework import DjangoFilterBackend
 
 from .models import (
-    Category, Tag, Recipe, Comment, Rating, 
+    Category, Tag, Recipe, Comment, Rating, Ingredient,
     FavoriteRecipe, LikedRecipe
 )
 from .serializers import (
     CategorySerializer, TagSerializer, 
     RecipeListSerializer, RecipeDetailSerializer, RecipeCreateUpdateSerializer,
-    CommentSerializer, RatingSerializer,
-    FavoriteRecipeSerializer, LikedRecipeSerializer
+    CommentSerializer, RatingSerializer, IngredientSerializer,
+    FavoriteRecipeSerializer, LikedRecipeSerializer, ReviewSerializer,
+    CommentReplySerializer, ReviewListSerializer
 )
 from .permissions import IsAuthorOrReadOnly, IsVerifiedChef
 from .filters import RecipeFilter
@@ -32,9 +34,71 @@ class CategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
     lookup_field = 'slug'
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
 
+class RecipeReviewView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, recipe_id):
+        """Get all reviews for a recipe"""
+        recipe = get_object_or_404(Recipe, id=recipe_id)
+        
+        # Get all top-level comments (reviews) for this recipe
+        reviews = Comment.objects.filter(
+            recipe=recipe, 
+            parent__isnull=True
+        ).order_by('-created_at')
+        
+        serializer = ReviewListSerializer(reviews, many=True)
+
+        # Calculate rating distribution
+        rating_counts = {star: 0 for star in range(1, 6)}
+        total_ratings = Rating.objects.filter(recipe=recipe).count()
+        for star in range(1, 6):
+            rating_counts[star] = Rating.objects.filter(recipe=recipe, value=star).count()
+        rating_percentages = {
+            star: round((rating_counts[star] / total_ratings) * 100, 1) if total_ratings else 0
+            for star in range(1, 6)
+        }
+        return Response({
+            'results': serializer.data,
+            'count': reviews.count(),
+            'rating_percentages': rating_percentages,  # <-- Add this
+        })
+
+    def post(self, request, recipe_id):
+        """Submit a review for a recipe"""
+        recipe = get_object_or_404(Recipe, id=recipe_id)
+        serializer = ReviewSerializer(data=request.data, context={'request': request, 'recipe': recipe})
+        serializer.is_valid(raise_exception=True)
+        review = serializer.save()
+        return Response(review, status=status.HTTP_201_CREATED)
+        
+class CommentReplyView(APIView):
+    permission_classes = [permissions.AllowAny]
+    
+    def post(self, request, recipe_id, comment_id):
+        """Reply to a comment"""
+        recipe = get_object_or_404(Recipe, id=recipe_id)
+        parent_comment = get_object_or_404(Comment, id=comment_id, recipe=recipe)
+        
+        data = request.data.copy()
+        data['parent'] = parent_comment.id
+        
+        serializer = CommentSerializer(
+            data=data,
+            context={'request': request, 'recipe': recipe}
+        )
+        
+        if serializer.is_valid():
+            reply = serializer.save()
+            return Response({
+                'detail': 'Reply submitted successfully.',
+                'reply': CommentReplySerializer(reply).data
+            }, status=status.HTTP_201_CREATED)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 class TagListCreateView(generics.ListCreateAPIView):
     queryset = Tag.objects.all()
     serializer_class = TagSerializer
@@ -42,6 +106,12 @@ class TagListCreateView(generics.ListCreateAPIView):
     filter_backends = [filters.SearchFilter]
     search_fields = ['name']
 
+class IngredientListCreateView(generics.ListCreateAPIView):
+    queryset = Ingredient.objects.all()
+    serializer_class = IngredientSerializer
+    permission_classes = [permissions.AllowAny]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['name']
 
 class TagDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Tag.objects.all()
@@ -52,7 +122,7 @@ class TagDetailView(generics.RetrieveUpdateDestroyAPIView):
 class RecipeListCreateView(generics.ListCreateAPIView):
     queryset = Recipe.objects.all()
     # Change permission classes to include IsVerifiedChef
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsVerifiedChef]
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = RecipeFilter
     search_fields = ['title', 'description', 'author__username', 'category__name', 'tags__name']
@@ -95,15 +165,15 @@ class RecipeListCreateView(generics.ListCreateAPIView):
         if not user.role == 'CHEF':
             raise PermissionDenied("Only chefs can create recipes.")
         
-        if not user.is_verified:
-            raise PermissionDenied("Your account must be verified to create recipes.")
+        # if not user.is_verified:
+        #     raise PermissionDenied("Your account must be verified to create recipes.")
         
-        try:
-            chef_profile = user.chef_profile
-            if chef_profile.verification_status != 'VERIFIED':
-                raise PermissionDenied("Your chef profile must be verified to create recipes.")
-        except:
-            raise PermissionDenied("Chef profile not found or not properly set up.")
+        # try:
+        #     chef_profile = user.chef_profile
+        #     if chef_profile.verification_status != 'VERIFIED':
+        #         raise PermissionDenied("Your chef profile must be verified to create recipes.")
+        # except:
+        #     raise PermissionDenied("Chef profile not found or not properly set up.")
         
         # If all checks pass, save the recipe
         serializer.save(author=user)
@@ -111,9 +181,9 @@ class RecipeListCreateView(generics.ListCreateAPIView):
 
 class RecipeDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Recipe.objects.all()
-    lookup_field = 'slug'
+    lookup_field = 'id'
     # Include IsVerifiedChef permission to ensure only verified chefs can update
-    permission_classes = [IsAuthorOrReadOnly, IsVerifiedChef]
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     
     def get_serializer_class(self):
         if self.request.method in ['PUT', 'PATCH']:

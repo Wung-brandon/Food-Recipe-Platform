@@ -57,6 +57,7 @@ class Recipe(models.Model):
     slug = models.SlugField(max_length=270, unique=True, blank=True)
     description = models.TextField()
     image = models.ImageField(upload_to='recipe_pics/', blank=True, null=True)
+    video = models.FileField(upload_to='recipe_videos/', blank=True, null=True)
     preparation_time = models.PositiveIntegerField(help_text="Time in minutes")
     cooking_time = models.PositiveIntegerField(help_text="Time in minutes")
     servings = models.PositiveIntegerField(default=1)
@@ -77,11 +78,12 @@ class Recipe(models.Model):
         
     def save(self, *args, **kwargs):
         if not self.slug:
-            self.slug = slugify(self.title)
+            base_slug = slugify(self.title)
+            self.slug = base_slug
             # Check for duplicate slugs
             count = 1
-            while Recipe.objects.filter(slug=self.slug).exists():
-                self.slug = f"{slugify(self.title)}-{count}"
+            while Recipe.objects.filter(slug=self.slug).exclude(pk=self.pk).exists():
+                self.slug = f"{base_slug}-{count}"
                 count += 1
         super().save(*args, **kwargs)
     
@@ -102,9 +104,12 @@ class Recipe(models.Model):
 
 
 class Ingredient(models.Model):
-    recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name='ingredients')
+    recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name='ingredient_items')
     name = models.CharField(max_length=100)
     amount = models.CharField(max_length=100)
+    
+    class Meta:
+        ordering = ['id']  # Keep original order
     
     def __str__(self):
         return f"{self.name} - {self.amount}"
@@ -113,13 +118,14 @@ class Ingredient(models.Model):
 class Step(models.Model):
     recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name='steps')
     description = models.TextField()
-    order = models.PositiveIntegerField()
+    
     
     class Meta:
-        ordering = ['order']
+        ordering = ['id']
+        unique_together = ('recipe', 'description')  # Ensure unique order per recipe
     
     def __str__(self):
-        return f"Step {self.order} for {self.recipe.title}"
+        return f"Step {self.description} for {self.recipe.title}"
 
 
 class Tip(models.Model):
@@ -132,35 +138,32 @@ class Tip(models.Model):
 
 class Comment(models.Model):
     recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name='comments')
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='recipe_comments')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    username = models.CharField(max_length=100, blank=True)
     text = models.TextField()
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         ordering = ['-created_at']
-    
-    def __str__(self):
-        return f"Comment by {self.user.username} on {self.recipe.title}"
 
+    def __str__(self):
+        return f'Comment by {self.username or self.user} on {self.recipe.title}'
 
 class Rating(models.Model):
     recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name='ratings')
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='recipe_ratings')
-    value = models.DecimalField(
-        max_digits=3, 
-        decimal_places=1,
-        validators=[MinValueValidator(0), MaxValueValidator(5)]
-    )
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    username = models.CharField(max_length=100, blank=True)
+    value = models.DecimalField(max_digits=3, decimal_places=1)
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        unique_together = ('recipe', 'user')
-        
-    def __str__(self):
-        return f"{self.user.username} rated {self.recipe.title}: {self.value}"
 
+    class Meta:
+        unique_together = [['recipe', 'user'], ['recipe', 'username']]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.value} stars by {self.username or self.user} for {self.recipe.title}'
 
 class FavoriteRecipe(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -177,7 +180,7 @@ class FavoriteRecipe(models.Model):
 class LikedRecipe(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE)
-    liked_at = models.DateTimeField(auto_now_add=True)
+    liked_at = models.DateTimeField(auto_now=True)
     
     class Meta:
         unique_together = ('user', 'recipe')

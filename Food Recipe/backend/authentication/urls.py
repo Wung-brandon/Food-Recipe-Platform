@@ -17,6 +17,8 @@ urlpatterns = [
     path('allchefs/', views.ListAllChefsView.as_view(), name='all-chefs'),
     
     # Chef specific endpoints
+    path('chef/profile/', views.RetrieveUpdateChefProfileView.as_view(), name='chef-profile-self'),
+
     path('chef/profile/<int:id>/', views.RetrieveUpdateChefProfileView.as_view(), name='chef-profile-detail'),
     path('chef/status/', views.check_chef_status, name='chef-status'),
     path('chefs/verified/', views.ListAllVerifiedChefsView.as_view(), name='verified-chefs'),

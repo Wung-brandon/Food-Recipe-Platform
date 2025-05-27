@@ -25,7 +25,7 @@ import {
   Close as CloseIcon,
   Add as AddIcon
 } from '@mui/icons-material';
-import RecipeData from '../../types/Recipe';
+import { RecipeData } from '../../types/Recipe';
 import { 
   spaghetti,
   ekwang,
@@ -39,7 +39,7 @@ import {
 import RecipeCard from '../../components/RecipeCard';
 import { Recipe } from '../../types/Recipe';
 import { RecipeForm } from '../../components/RecipeForm';
-
+import UserDashboardLayout from '../../Layout/UserDashboardLayout';
 const recipes: RecipeData[] = [
   {
     id: 1,
@@ -361,7 +361,7 @@ const RecipesPage: React.FC = () => {
   );
 
   return (
-    <Container maxWidth="xl" sx={{ py: { xs: 2, sm: 4 } }}>
+    <UserDashboardLayout title="My Recipes">
       <Box sx={{ mb: { xs: 3, md: 4 } }}>
         <Typography 
           variant="h4" 
@@ -434,7 +434,7 @@ const RecipesPage: React.FC = () => {
             )}
             
             {/* Add Recipe button */}
-            <Button 
+            {/* <Button 
               variant="contained" 
               startIcon={!isMobile && <AddIcon />}
               onClick={() => setOpenRecipeForm(true)}
@@ -452,7 +452,7 @@ const RecipesPage: React.FC = () => {
               }}
             >
               {isMobile ? <AddIcon /> : 'Add Recipe'}
-            </Button>
+            </Button> */}
           </Box>
         </Box>
         
@@ -561,7 +561,7 @@ const RecipesPage: React.FC = () => {
         onClose={() => setOpenRecipeForm(false)}
         onSave={handleSaveRecipe}
       />
-    </Container>
+    </UserDashboardLayout>
   );
 };
 

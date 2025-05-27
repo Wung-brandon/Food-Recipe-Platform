@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import DashboardLayout from '../../../Layout/DashboardLayout';
 import axios from 'axios';
+import { toast } from 'react-toastify';
 
 // Define verification status badges
 const VerificationBadge = ({ status }) => {
@@ -39,30 +40,63 @@ const ChefProfilePage = () => {
   const navigate = useNavigate();
   const BaseUrl = "http://127.0.0.1:8000/";
   
-  // State for profile data
-  const [profileData, setProfileData] = useState({
-    id: null,
-    verification_status: '',
-    years_of_experience: '',
-    specialization: '',
-    certification: '',
-    certification_number: '',
-    issuing_authority: '',
-    identity_proof: null,
-    food_safety_certification: null,
-    has_accepted_terms: false,
-    verification_date: null
+  // Get the actual chef profile ID from the logged-in user or URL param
+  const chefProfileId = id || user?.chef_profile?.id;
+  
+  // State for profile data - initialize with user's chef_profile data if available
+  const [profileData, setProfileData] = useState(() => {
+    if (user?.chef_profile) {
+      return {
+        id: user.chef_profile.id,
+        verification_status: user.chef_profile.verification_status || '',
+        years_of_experience: user.chef_profile.years_of_experience || '',
+        specialization: user.chef_profile.specialization || '',
+        certification: user.chef_profile.certification || '',
+        certification_number: user.chef_profile.certification_number || '',
+        issuing_authority: user.chef_profile.issuing_authority || '',
+        identity_proof: user.chef_profile.identity_proof || null,
+        food_safety_certification: user.chef_profile.food_safety_certification || null,
+        has_accepted_terms: user.chef_profile.has_accepted_terms || false,
+        verification_date: user.chef_profile.verification_date || null
+      };
+    }
+    return {
+      id: null,
+      verification_status: '',
+      years_of_experience: '',
+      specialization: '',
+      certification: '',
+      certification_number: '',
+      issuing_authority: '',
+      identity_proof: null,
+      food_safety_certification: null,
+      has_accepted_terms: false,
+      verification_date: null
+    };
   });
   
-  // State for general user profile data
-  const [userProfile, setUserProfile] = useState({
-    username: '',
-    email: '',
-    first_name: '',
-    last_name: '',
-    bio: '',
-    profile_picture: null,
-    phone_number: ''
+  // State for general user profile data - initialize with user data if available
+  const [userProfile, setUserProfile] = useState(() => {
+    if (user) {
+      return {
+        username: user.username || '',
+        email: user.email || '',
+        first_name: user.first_name || '',
+        last_name: user.last_name || '',
+        bio: user.bio || '',
+        profile_picture: user.profile_picture || user.chef_profile?.profile_picture || null,
+        phone_number: user.phone_number || ''
+      };
+    }
+    return {
+      username: '',
+      email: '',
+      first_name: '',
+      last_name: '',
+      bio: '',
+      profile_picture: null,
+      phone_number: ''
+    };
   });
   
   // State for UI handling
@@ -83,53 +117,48 @@ const ChefProfilePage = () => {
   useEffect(() => {
     const fetchProfileData = async () => {
       setIsLoading(true);
-      
       try {
-        // Make sure we have a valid profileId
-        let profileId = id;
-        
-        // If id is not provided in URL or is undefined, use the logged in user's ID
-        if (!profileId && user && user.id) {
-          profileId = user.id;
+        console.log("Chef Profile ID:", chefProfileId);
+        if (!chefProfileId) {
+          throw new Error("Chef profile ID is not available");
         }
-        
-        if (!profileId) {
-          throw new Error("User ID is not available");
-        }
-        
-        // Fetch chef profile
-        const response = await axios.get(`${BaseUrl}api/auth/chef/profile/${profileId}/`, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`
+
+        // If we already have the data from user context and it's the same profile, skip API call
+        if (user?.chef_profile?.id === parseInt(chefProfileId)) {
+          console.log("Using data from user context");
+          // Set profile picture preview if available
+          if (userProfile.profile_picture) {
+            setProfilePicturePreview(`${BaseUrl}${userProfile.profile_picture}`);
           }
+          setIsLoading(false);
+          return;
+        }
+
+        // Fetch chef profile from API (for viewing other profiles or refreshing data)
+        const response = await axios.get(`${BaseUrl}api/auth/chef/profile/${chefProfileId}/`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
         });
-        
         setProfileData(response.data);
-        
-        // Also fetch basic user profile info
-        const userResponse = await axios.get(`${BaseUrl}api/auth/user/profile/${profileId}/`, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`
-          }
+
+        // Fetch user profile
+        const userResponse = await axios.get(`${BaseUrl}api/auth/user/profile/${chefProfileId}/`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
         });
-        
         setUserProfile(userResponse.data);
-        
-        // Set profile picture preview if exists
+
         if (userResponse.data.profile_picture) {
           setProfilePicturePreview(`${BaseUrl}${userResponse.data.profile_picture}`);
         }
-        
       } catch (err) {
-        console.error("Error fetching profile data:", err);
+        console.error("Error fetching profile:", err);
         setError("Failed to load profile data. Please try again later.");
       } finally {
         setIsLoading(false);
       }
     };
-    
+
     fetchProfileData();
-  }, [id, user]);
+  }, [chefProfileId, user]);
   
   // Handle form input changes
   const handleProfileChange = (e) => {
@@ -186,98 +215,162 @@ const ChefProfilePage = () => {
   };
   
   // Handle form submission
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsSaving(true);
-    setSuccessMessage('');
-    setErrorMessage('');
+  // Handle form submission
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setIsSaving(true);
+  setSuccessMessage('');
+  setErrorMessage('');
+  
+  try {
+    if (!chefProfileId) {
+      throw new Error("Chef profile ID is not available");
+    }
     
-    try {
-      // Ensure we have a valid profileId
-      let profileId = profileData.id;
-      if (!profileId && user && user.id) {
-        profileId = user.id;
+    // Get fresh token or refresh if needed
+    const token = localStorage.getItem('token');
+    let headers = {
+      'Authorization': `Bearer ${token}`,
+    };
+    
+    // Try to refresh token if request fails with 401
+    const refreshTokenIfNeeded = async (originalRequest) => {
+      try {
+        return await originalRequest();
+      } catch (error) {
+        if (error.response?.status === 401) {
+          // Try to refresh token
+          const refreshToken = localStorage.getItem('refresh_token');
+          if (refreshToken) {
+            try {
+              const refreshResponse = await axios.post(`${BaseUrl}api/auth/token/refresh/`, {
+                refresh: refreshToken
+              });
+              const newToken = refreshResponse.data.access;
+              localStorage.setItem('token', newToken);
+              headers.Authorization = `Bearer ${newToken}`;
+              // Retry original request with new token
+              return await originalRequest();
+            } catch (refreshError) {
+              // Refresh failed, redirect to login
+              navigate('/login');
+              throw new Error('Session expired. Please login again.');
+            }
+          } else {
+            navigate('/login');
+            throw new Error('Session expired. Please login again.');
+          }
+        }
+        throw error;
       }
+    };
+    
+    // Update chef profile
+    await refreshTokenIfNeeded(async () => {
+      const chefFormData = new FormData();
       
-      if (!profileId) {
-        throw new Error("Profile ID is not available");
-      }
+      // Add only chef profile fields
+      const chefFields = [
+        'years_of_experience', 
+        'specialization', 
+        'certification', 
+        'certification_number', 
+        'issuing_authority',
+        'has_accepted_terms'
+      ];
       
-      // Create FormData for file uploads
-      const formData = new FormData();
-      
-      // Add chef profile data
-      Object.keys(profileData).forEach(key => {
-        if (key !== 'identity_proof' && key !== 'food_safety_certification' && profileData[key] !== null) {
-          formData.append(key, profileData[key]);
+      chefFields.forEach(field => {
+        if (profileData[field] !== null && profileData[field] !== undefined && profileData[field] !== '') {
+          chefFormData.append(field, profileData[field]);
         }
       });
       
-      // Add user profile data
-      Object.keys(userProfile).forEach(key => {
-        if (key !== 'profile_picture' && userProfile[key] !== null) {
-          formData.append(key, userProfile[key]);
-        }
-      });
-      
-      // Add file uploads if they exist
-      if (profilePicture) {
-        formData.append('profile_picture', profilePicture);
-      }
-      
+      // Add file uploads for chef profile
       if (identityProof) {
-        formData.append('identity_proof', identityProof);
+        chefFormData.append('identity_proof', identityProof);
       }
       
       if (foodSafetyCert) {
-        formData.append('food_safety_certification', foodSafetyCert);
+        chefFormData.append('food_safety_certification', foodSafetyCert);
       }
       
-      // Submit the form data
-      const response = await axios.put(`${BaseUrl}api/auth/chef/profile/${profileId}/`, formData, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-      
-      // Also update user profile if profile picture changed
-      if (profilePicture) {
-        const userFormData = new FormData();
-        userFormData.append('profile_picture', profilePicture);
-        
-        // Add other user profile fields
-        Object.keys(userProfile).forEach(key => {
-          if (key !== 'profile_picture' && userProfile[key] !== null) {
-            userFormData.append(key, userProfile[key]);
-          }
-        });
-        
-        const userResponse = await axios.put(`${BaseUrl}api/auth/user/profile/${profileId}/`, userFormData, {
+      const response = await axios.put(
+        `${BaseUrl}api/auth/chef/profile/${chefProfileId}/`, 
+        chefFormData, 
+        {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            ...headers,
             'Content-Type': 'multipart/form-data'
           }
-        });
-        
-        setUserProfile(userResponse.data);
-      }
+        }
+      );
       
       // Update the local state with the response data
       setProfileData(response.data);
-      setSuccessMessage('Profile updated successfully!');
-      setIsEditing(false);
-      
-    } catch (err) {
-      console.error("Error updating profile:", err);
-      setErrorMessage(
-        err.response?.data?.message || 
-        "Failed to update profile. Please try again later."
-      );
-    } finally {
-      setIsSaving(false);
+      return response;
+    });
+    
+    // Update user profile separately if there are changes
+    const userFieldsChanged = profilePicture || 
+      Object.keys(userProfile).some(key => {
+        if (key === 'profile_picture') return false;
+        return userProfile[key] !== (user?.[key] || '');
+      });
+    
+    if (userFieldsChanged) {
+      await refreshTokenIfNeeded(async () => {
+        const userFormData = new FormData();
+        
+        // Add user profile fields
+        const userFields = ['first_name', 'last_name', 'email', 'phone_number', 'bio', 'username'];
+        userFields.forEach(field => {
+          if (userProfile[field] !== null && userProfile[field] !== undefined) {
+            userFormData.append(field, userProfile[field]);
+          }
+        });
+        
+        // Add profile picture if changed
+        if (profilePicture) {
+          userFormData.append('profile_picture', profilePicture);
+        }
+        
+        const userResponse = await axios.put(
+          `${BaseUrl}api/auth/user/profile/`, // Note: removed ID, assuming it uses current user
+          userFormData, 
+          {
+            headers: {
+              ...headers,
+              'Content-Type': 'multipart/form-data'
+            }
+          }
+        );
+        
+        setUserProfile(userResponse.data);
+        return userResponse;
+      });
     }
-  };
+    
+    setSuccessMessage('Profile updated successfully!');
+    toast.success('Profile updated successfully!');
+    setIsEditing(false);
+    
+    // Reset file states
+    setProfilePicture(null);
+    setIdentityProof(null);
+    setFoodSafetyCert(null);
+    
+  } catch (err) {
+    console.error("Error updating profile:", err);
+    const errorMsg = err.response?.data?.message || 
+                    err.response?.data?.detail ||
+                    err.message ||
+                    "Failed to update profile. Please try again later.";
+    setErrorMessage(errorMsg);
+    toast.error(errorMsg);
+  } finally {
+    setIsSaving(false);
+  }
+};
   
   // Handle cancel edit
   const handleCancelEdit = () => {
@@ -286,6 +379,40 @@ const ChefProfilePage = () => {
     // Reset profile picture preview if it was changed
     if (userProfile.profile_picture && !profilePicture) {
       setProfilePicturePreview(`${BaseUrl}${userProfile.profile_picture}`);
+    }
+    
+    // Reset any file uploads
+    setProfilePicture(null);
+    setIdentityProof(null);
+    setFoodSafetyCert(null);
+    
+    // Reset form data to original values
+    if (user?.chef_profile) {
+      setProfileData({
+        id: user.chef_profile.id,
+        verification_status: user.chef_profile.verification_status || '',
+        years_of_experience: user.chef_profile.years_of_experience || '',
+        specialization: user.chef_profile.specialization || '',
+        certification: user.chef_profile.certification || '',
+        certification_number: user.chef_profile.certification_number || '',
+        issuing_authority: user.chef_profile.issuing_authority || '',
+        identity_proof: user.chef_profile.identity_proof || null,
+        food_safety_certification: user.chef_profile.food_safety_certification || null,
+        has_accepted_terms: user.chef_profile.has_accepted_terms || false,
+        verification_date: user.chef_profile.verification_date || null
+      });
+    }
+    
+    if (user) {
+      setUserProfile({
+        username: user.username || '',
+        email: user.email || '',
+        first_name: user.first_name || '',
+        last_name: user.last_name || '',
+        bio: user.bio || '',
+        profile_picture: user.profile_picture || user.chef_profile?.profile_picture || null,
+        phone_number: user.phone_number || ''
+      });
     }
   };
   

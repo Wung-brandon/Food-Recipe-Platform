@@ -1,5 +1,6 @@
 interface CategoryData {
     id: string;
+    slug?: string; // Optional slug for routing
     name: string;
     recipeCount: number;
     imageUrl?: string;

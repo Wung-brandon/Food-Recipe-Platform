@@ -32,12 +32,12 @@ class IsVerifiedChef(permissions.BasePermission):
             return False
             
         # Check if user is verified
-        if not request.user.is_verified:
-            return False
+        # if not request.user.is_verified:
+        #     return False
             
-        # Check if chef profile exists and is verified
-        try:
-            chef_profile = request.user.chef_profile
-            return chef_profile.verification_status == 'VERIFIED'
-        except:
-            return False
+        # # Check if chef profile exists and is verified
+        # try:
+        #     chef_profile = request.user.chef_profile
+        #     return chef_profile.verification_status == 'VERIFIED'
+        # except:
+        #     return False

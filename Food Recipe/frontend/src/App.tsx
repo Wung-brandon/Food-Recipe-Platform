@@ -82,10 +82,13 @@ function App() {
               {/* Dashboard route */}
                 <Route path='/dashboard/chef' element={<ChefDashboard />}/>
                 <Route path='/dashboard/chef/recipe' element={<ChefRecipes />}/>
-                <Route path='/dashboard/chef/profile/:id' element={<ChefProfilePage />}/>
+                <Route path='/dashboard/chef/profile' element={<ChefProfilePage />} />
+                <Route path='/dashboard/chef/profile/:id' element={<ChefProfilePage />} />  
                 <Route path="/dashboard/chef/create-recipe" element={<CreateRecipePage />} />
                 <Route path='/dashboard/chef/followers' element={<FollowersPage />}/>
                 <Route path='/dashboard/chef/analytics' element={<AnalyticsPage />}/>
+
+                <Route path="/dashboard/chef/edit-recipe/:slug" element={<CreateRecipePage />} />
 
 
                 <Route path='/dashboard/user' element={<UserDashboard />}/>
@@ -95,7 +98,7 @@ function App() {
                 <Route path='settings' element={<SettingsPage />} />
                 <Route path='orders' element={<OrderHistoryPage />} />
                 <Route path='meal-planner' element={<MealPlannerPage />} />
-                <Route path='recipes' element={<RecipesPage />} />
+                <Route path='/dashboard/user/recipes' element={<RecipesPage />} />
                 <Route path='profile' element={<ProfilePage />} />
               
             </Routes>

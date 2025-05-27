@@ -1,17 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Typography, Rating, Chip, Pagination, Skeleton } from '@mui/material';
-import { AccessTime, RestaurantMenu, Bookmark, BookmarkBorder } from '@mui/icons-material';
+import { Typography, Pagination, Skeleton } from '@mui/material';
+import axios from 'axios';
 import TitleText from "../components/TitleText";
 import RecipeCard from '../components/RecipeCard';
-import { 
-    spaghetti,
-    chicken,
-    beans,
-    delicious,
-    plantain, } from '../components/images';
-// Types
+import { useAuth } from '../context/AuthContext';
 interface Recipe {
   id: string;
   title: string;
@@ -30,6 +24,12 @@ interface Category {
   image: string;
 }
 
+const API_BASE_URL = 'http://localhost:8000';
+const API_ENDPOINTS = {
+  categoryDetail: (slug: string) => `${API_BASE_URL}/api/categories/${slug}/`,
+  recipesByCategory: (slug: string) => `${API_BASE_URL}/api/recipes/?category=${slug}`,
+};
+
 const CategoryDetails: React.FC = () => {
   const { categoryId } = useParams<{ categoryId: string }>();
   const navigate = useNavigate();
@@ -40,71 +40,73 @@ const CategoryDetails: React.FC = () => {
   const [page, setPage] = useState(1);
   const recipesPerPage = 6;
 
-  // Mock data - in a real app, fetch from API
+  const { token } = useAuth();
+
   useEffect(() => {
-    // Simulate API call
-    setTimeout(() => {
-      const categoryData = {
-        breakfast: {
-          id: 'breakfast',
-          name: 'Breakfast',
-          description: 'Start your day with these nutritious and delicious breakfast recipes that will fuel your morning and keep you energized throughout the day.',
-          image: spaghetti
-        },
-        lunch: {
-          id: 'lunch',
-          name: 'Lunch',
-          description: 'Quick, satisfying midday meals perfect for busy schedules. Our lunch recipes offer a perfect balance of nutrition and flavor.',
-          image: chicken
-        },
-        baked: {
-          id: 'baked',
-          name: 'Baked Foods',
-          description: 'From crusty artisan breads to delectable pastries, our baked goods recipes bring the warmth and aroma of a professional bakery to your home.',
-          image: beans
-        },
-        desserts: {
-          id: 'desserts',
-          name: 'Desserts',
-          description: 'Indulge your sweet tooth with our collection of dessert recipes, from quick and easy treats to impressive showstoppers.',
-          image: delicious
-        },
-        vegetarian: {
-          id: 'vegetarian',
-          name: 'Vegetarian',
-          description: 'Flavorful vegetarian dishes that prove meat-free meals can be satisfying, nutritious, and incredibly delicious.',
-          image: plantain
-        },
-      };
-
-      const mockRecipes = Array(12).fill(null).map((_, index) => ({
-        id: `recipe-${categoryId}-${index}`,
-        title: `${categoryData[categoryId as keyof typeof categoryData]?.name} Recipe ${index + 1}`,
-        imageUrl: category?.image || '/api/placeholder/400/300', // Changed from image to imageUrl
-        cookTime: Math.floor(Math.random() * 50) + 10,
-        difficulty: ['Easy', 'Medium', 'Hard'][Math.floor(Math.random() * 3)],
-        rating: Math.floor(Math.random() * 5) + 1,
-        category: categoryId || '',
-        isLiked: Math.random() > 0.7, // Changed from isFavorite to isLiked
-        isSaved: Math.random() > 0.7, // Added this property
-        likeCount: Math.floor(Math.random() * 100),
-        reviewCount: Math.floor(Math.random() * 50),
-        author: {
-          name: "Chef " + (index + 1),
-          avatarUrl: "/api/placeholder/50/50"
+    const fetchCategoryDetails = async () => {
+      setLoading(true);
+      try {
+        if (!categoryId) {
+          navigate('/not-found');
+          return;
         }
-      }));
+        // Fetch category details
+        const catRes = await axios.get(API_ENDPOINTS.categoryDetail(categoryId));
+        setCategory({
+          id: catRes.data.id || catRes.data.slug,
+          name: catRes.data.name,
+          description: catRes.data.description || '',
+          image: catRes.data.image || '/api/placeholder/400/300',
+        });
 
-      // Get all categories except current one
-      const allCategories = Object.values(categoryData);
-      const related = allCategories.filter(cat => cat.id !== categoryId);
-      
-      setCategory(categoryData[categoryId as keyof typeof categoryData] || null);
-      setRecipes(mockRecipes);
-      setRelatedCategories(related);
-      setLoading(false);
-    }, 1200);
-  }, [categoryId]);
+        // Fetch recipes for this category, with token if available
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const recRes = await axios.get(
+          API_BASE_URL + `/api/recipes/?category=${categoryId}`,
+          { headers }
+        );
+        setRecipes(
+          (recRes.data.results || recRes.data).map((r: any) => ({
+            id: r.id,
+            title: r.title,
+            imageUrl: r.image || '/api/placeholder/400/300',
+            cookTime: r.cooking_time || 0,
+            difficulty: r.difficulty || '',
+            rating: r.rating || 0,
+            category: r.category?.name || r.category || '',
+            isLiked: r.is_liked || false,
+            isSaved: r.is_saved || false,
+            likeCount: r.likes || 0,
+            reviewCount: r.review_count || 0,
+            author: {
+              name: r.chef_name || r.chef?.username || r.author?.username || 'Chef',
+              avatarUrl: r.chef_avatar || r.chef?.avatar || '/api/placeholder/50/50',
+            },
+          }))
+        );
+
+        // Optionally fetch related categories (all except current)
+        const allCatsRes = await axios.get(API_BASE_URL + '/api/categories/');
+        setRelatedCategories(
+          (allCatsRes.data.results || allCatsRes.data)
+            .filter((cat: any) => (cat.slug || cat.id) !== categoryId)
+            .map((cat: any) => ({
+              id: cat.id || cat.slug,
+              slug: cat.slug,
+              name: cat.name,
+              description: cat.description || '',
+              image: cat.image || '/api/placeholder/400/300',
+            }))
+        );
+      } catch (error) {
+        navigate('/not-found');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCategoryDetails();
+  }, [categoryId, navigate]);
 
   // Pagination logic
   const handlePageChange = (event: React.ChangeEvent<unknown>, value: number) => {
@@ -215,7 +217,12 @@ const CategoryDetails: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {paginatedRecipes.map(recipe => (
                 <div key={recipe.id}>
-                <RecipeCard recipe={recipe} />
+                <RecipeCard
+                  recipe={recipe}
+                  currentUserId={null}
+                  onEdit={() => {}}
+                  onDelete={() => {}}
+                />
                 </div>
             ))}
             </div>
@@ -256,7 +263,7 @@ const CategoryDetails: React.FC = () => {
                 key={relatedCategory.id}
                 variants={itemVariants}
                 className="relative h-48 rounded-xl overflow-hidden cursor-pointer group"
-                onClick={() => navigate(`/category/${relatedCategory.id}`)}
+                onClick={() => navigate(`/category/${relatedCategory.slug}`)}
               >
                 <div className="absolute inset-0 bg-black/40 group-hover:bg-black/60 transition-colors duration-300 z-10 flex items-center justify-center">
                   <Typography variant="h6" className="text-white font-bold text-xl">
@@ -278,3 +285,8 @@ const CategoryDetails: React.FC = () => {
 };
 
 export default CategoryDetails;
+
+
+
+
+

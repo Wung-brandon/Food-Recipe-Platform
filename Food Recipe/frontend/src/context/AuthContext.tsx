@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 
 // Interfaces for TypeScript
 interface User {
-  id: string;
+  id: number;
   email: string;
   username?: string;
   role?: 'user' | 'chef' | 'admin'; // Add role field
@@ -69,6 +69,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true); // Add loading state
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
 
@@ -77,25 +78,93 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Check for existing token on initial load
   useEffect(() => {
-    const storedToken = localStorage.getItem('access_token');
-    const storedUser = localStorage.getItem('user');
-  
-    if (storedToken && storedUser) {
-      try {
-        const decoded = jwtDecode<User & { role?: string }>(storedToken);
-        console.log("Decoded token:", decoded);
-        const parsedUser = JSON.parse(storedUser);
-        setUser(parsedUser);
-        setToken(storedToken);
-        setIsAuthenticated(true);
-        setUserRole(parsedUser.role || 'user'); // Set role from storage or default to 'user'
-      } catch {
-        // Invalid token, clear storage
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        localStorage.removeItem('user');
+    const initializeAuth = async () => {
+      setIsLoading(true);
+      
+      const storedToken = localStorage.getItem('access_token');
+      const storedUser = localStorage.getItem('user');
+    
+      if (storedToken && storedUser) {
+        try {
+          const decoded = jwtDecode<User & { role?: string }>(storedToken);
+          console.log("Decoded token:", decoded);
+          
+          // Check if token is expired
+          const currentTime = Date.now() / 1000;
+          if (decoded.exp && decoded.exp < currentTime) {
+            // Token is expired, try to refresh
+            const refreshToken = localStorage.getItem('refresh_token');
+            if (refreshToken) {
+              try {
+                const response = await axios.post(`${BaseUrl}api/auth/token/refresh/`, { 
+                  refresh: refreshToken 
+                });
+                const { access } = response.data;
+                localStorage.setItem('access_token', access);
+                
+                // Get updated user info
+                const userResponse = await axios.get(`${BaseUrl}api/auth/user/`, {
+                  headers: { Authorization: `Bearer ${access}` }
+                });
+                const userData = userResponse.data;
+                
+                localStorage.setItem('user', JSON.stringify(userData));
+                setUser(userData);
+                setToken(access);
+                setIsAuthenticated(true);
+                setUserRole(userData.role || 'user');
+              } catch (refreshError) {
+                console.error("Token refresh failed:", refreshError);
+                // Clear invalid tokens
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('refresh_token');
+                localStorage.removeItem('user');
+                setUser(null);
+                setToken(null);
+                setIsAuthenticated(false);
+                setUserRole(null);
+              }
+            } else {
+              // No refresh token, clear everything
+              localStorage.removeItem('access_token');
+              localStorage.removeItem('refresh_token');
+              localStorage.removeItem('user');
+              setUser(null);
+              setToken(null);
+              setIsAuthenticated(false);
+              setUserRole(null);
+            }
+          } else {
+            // Token is still valid
+            const parsedUser = JSON.parse(storedUser);
+            setUser(parsedUser);
+            setToken(storedToken);
+            setIsAuthenticated(true);
+            setUserRole(parsedUser.role || 'user');
+          }
+        } catch (error) {
+          console.error("Token validation failed:", error);
+          // Invalid token, clear storage
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+          localStorage.removeItem('user');
+          setUser(null);
+          setToken(null);
+          setIsAuthenticated(false);
+          setUserRole(null);
+        }
+      } else {
+        // No stored auth data
+        setUser(null);
+        setToken(null);
+        setIsAuthenticated(false);
+        setUserRole(null);
       }
-    }
+      
+      setIsLoading(false);
+    };
+
+    initializeAuth();
   }, []);
 
   // Login function
@@ -126,6 +195,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   
       const userData = userResponse.data;
       console.log("User data:", userData);
+      
+      // Store user data
+      localStorage.setItem('user', JSON.stringify(userData));
   
       // Set user and authentication state
       setUser(userData);
@@ -154,6 +226,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
   };
+
   // Google Login
   const googleLogin = async (googleToken: string) => {
     try {
@@ -184,127 +257,126 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Update the register function in AuthContext.tsx to match backend expectations
+  // Regular user register function
+  const register = async (email: string, password: string, confirm_password: string, username: string) => {
+    console.log("Sending registration data:", { username, email, password, confirm_password });
 
-// Regular user register function
-const register = async (email: string, password: string, confirm_password: string, username: string) => {
-  console.log("Sending registration data:", { username, email, password, confirm_password });
+    try {
+      const response = await axios.post(`${BaseUrl}api/auth/signup/`, { 
+        username,
+        email,
+        password,
+        confirm_password
+      });
 
-  try {
-    const response = await axios.post(`${BaseUrl}api/auth/signup/`, { 
-      username,
-      email,
-      password,
-      confirm_password
-    });
-
-    console.log("Response received:", response.data);
-    toast.success("Registration Successful! You can now login.");
-    navigate("/login");
-    return response.data;
-  } catch (error: any) {
-    console.error("Registration error:", error);
-    
-    // Check if it's a 500 error related to email
-    if (error.response?.status === 500) {
-      // The user might be created but email failed
-      toast.warning("Your account was created but we couldn't send a verification email. Please contact support.");
+      console.log("Response received:", response.data);
+      toast.success("Registration Successful! You can now login.");
       navigate("/login");
-      return;
-    }
-    
-    handleRegistrationError(error);
-    throw new Error('Registration failed');
-  }
-};
-
-// Chef register function corrected to match backend expectations
-const registerChef = async (
-  email: string,
-  password: string,
-  confirmPassword: string,
-  username: string,
-  specialization: string,
-  years_of_experience: string,
-  certification_number: string,
-  issuing_authority: string,
-  has_accepted_terms: boolean,
-  certification: File,
-  identity_proof: File,
-  food_safety_certification: File
-) => {
-  try {
-    // Create FormData for file uploads
-    const formData = new FormData();
-
-    // Add user fields as a nested object
-    const userData = {
-      email,
-      password,
-      confirm_password: confirmPassword,
-      username,
-    };
-    formData.append('user', JSON.stringify(userData));
-
-    // Add chef profile data
-    formData.append('specialization', specialization);
-    formData.append('years_of_experience', years_of_experience);
-    formData.append('certification_number', certification_number);
-    formData.append('issuing_authority', issuing_authority);
-    formData.append('has_accepted_terms', has_accepted_terms.toString());
-
-    // Add files
-    formData.append('certification', certification);
-    formData.append('identity_proof', identity_proof);
-    formData.append('food_safety_certification', food_safety_certification);
-
-    console.log("Sending chef registration data:", {
-      user: userData,
-      specialization,
-      years_of_experience,
-      certification_number,
-      issuing_authority,
-      has_accepted_terms,
-      files: {
-        certification: certification?.name,
-        identity_proof: identity_proof?.name,
-        food_safety_certification: food_safety_certification?.name,
-      },
-    });
-
-    // Send the request to the backend
-    const response = await axios.post(`${BaseUrl}api/auth/chef/signup/`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-
-    console.log("Chef registration response:", response.data);
-    toast.success("Chef Registration Successful! Your application is pending approval.");
-    return response.data;
-  } catch (error: any) {
-    console.error("Full error object:", error);
-
-    // Enhanced error handling
-    if (error.response?.data) {
-      const errorData = error.response.data;
-
-      // Handle field errors
-      for (const [field, messages] of Object.entries(errorData)) {
-        if (Array.isArray(messages)) {
-          toast.error(`${field}: ${messages[0]}`);
-        }
-        return; // Show only the first error
+      return response.data;
+    } catch (error: any) {
+      console.error("Registration error:", error);
+      
+      // Check if it's a 500 error related to email
+      if (error.response?.status === 500) {
+        // The user might be created but email failed
+        toast.warning("Your account was created but we couldn't send a verification email. Please contact support.");
+        navigate("/login");
+        return;
       }
-    } else if (error.request) {
-      toast.error("No response from server. Please check your connection.");
-    } else {
-      toast.error("Error setting up request: " + error.message);
+      
+      handleRegistrationError(error);
+      throw new Error('Registration failed');
     }
+  };
 
-    throw new Error('Chef registration failed');
-  }
-};
+  // Chef register function
+  const registerChef = async (
+    email: string,
+    password: string,
+    confirmPassword: string,
+    username: string,
+    specialization: string,
+    years_of_experience: string,
+    certification_number: string,
+    issuing_authority: string,
+    has_accepted_terms: boolean,
+    certification: File,
+    identity_proof: File,
+    food_safety_certification: File
+  ) => {
+    try {
+      // Create FormData for file uploads
+      const formData = new FormData();
+
+      // Add user fields as a nested object
+      const userData = {
+        email,
+        password,
+        confirm_password: confirmPassword,
+        username,
+      };
+      formData.append('user', JSON.stringify(userData));
+
+      // Add chef profile data
+      formData.append('specialization', specialization);
+      formData.append('years_of_experience', years_of_experience);
+      formData.append('certification_number', certification_number);
+      formData.append('issuing_authority', issuing_authority);
+      formData.append('has_accepted_terms', has_accepted_terms.toString());
+
+      // Add files
+      formData.append('certification', certification);
+      formData.append('identity_proof', identity_proof);
+      formData.append('food_safety_certification', food_safety_certification);
+
+      console.log("Sending chef registration data:", {
+        user: userData,
+        specialization,
+        years_of_experience,
+        certification_number,
+        issuing_authority,
+        has_accepted_terms,
+        files: {
+          certification: certification?.name,
+          identity_proof: identity_proof?.name,
+          food_safety_certification: food_safety_certification?.name,
+        },
+      });
+
+      // Send the request to the backend
+      const response = await axios.post(`${BaseUrl}api/auth/chef/signup/`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      console.log("Chef registration response:", response.data);
+      toast.success("Chef Registration Successful! Your application is pending approval.");
+      return response.data;
+    } catch (error: any) {
+      console.error("Full error object:", error);
+
+      // Enhanced error handling
+      if (error.response?.data) {
+        const errorData = error.response.data;
+
+        // Handle field errors
+        for (const [field, messages] of Object.entries(errorData)) {
+          if (Array.isArray(messages)) {
+            toast.error(`${field}: ${messages[0]}`);
+          }
+          return; // Show only the first error
+        }
+      } else if (error.request) {
+        toast.error("No response from server. Please check your connection.");
+      } else {
+        toast.error("Error setting up request: " + error.message);
+      }
+
+      throw new Error('Chef registration failed');
+    }
+  };
+
   // Helper function to handle registration errors
   const handleRegistrationError = (error: any) => {
     console.error("Registration error:", error.response?.data);
@@ -448,10 +520,10 @@ const registerChef = async (
           try {
             const refreshToken = localStorage.getItem('refresh_token');
             const response = await axios.post(`${BaseUrl}api/auth/token/refresh/`, { refresh: refreshToken });
-            toast.success("Token refreshed successfully");
             
             const { access } = response.data;
             localStorage.setItem('access_token', access);
+            setToken(access);
             
             // Retry the original request with the new token
             originalRequest.headers['Authorization'] = `Bearer ${access}`;
@@ -476,6 +548,7 @@ const registerChef = async (
   // Context value
   const contextValue: AuthContextType = {
     user,
+    isLoading,
     token,
     login,
     googleLogin,

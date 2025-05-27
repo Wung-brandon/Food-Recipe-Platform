@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -16,16 +17,14 @@ import {
   Box,
   Skeleton,
   CircularProgress,
-  Chip
+  Chip,
+  Collapse
 } from '@mui/material';
 import { 
   AccessTime, 
   LocalDining, 
   Share, 
-  PictureAsPdf, 
-  PlayArrow, 
-  Pause, 
-  Refresh, 
+  PictureAsPdf,  
   Message, 
   Print,
   Star,
@@ -35,29 +34,31 @@ import {
   ShoppingBasket,
   Info,
   Close,
-  Restaurant
+  Restaurant,
+  Reply,
+  ExpandMore,
+  ExpandLess
 } from '@mui/icons-material';
 import TitleText from '../components/TitleText';
 import { spaghetti } from '../components/images';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import axios from 'axios';
+import { Timer } from '../components/TimerComponent';
+import { toast } from 'react-toastify';
+import { Recipe } from '../types/Recipe';
 
-
-// Types
-interface Ingredient {
+interface ReviewReply {
   id: string;
-  name: string;
-  amount: string;
-  checked: boolean;
+  user: {
+    name: string;
+    avatar: string;
+  };
+  date: string;
+  content: string;
 }
 
-interface Step {
-  id: string;
-  description: string;
-  image?: string;
-}
-
-interface Comment {
+interface Review {
   id: string;
   user: {
     name: string;
@@ -66,33 +67,7 @@ interface Comment {
   date: string;
   rating: number;
   content: string;
-  likes: number;
-  isLiked: boolean;
-}
-
-interface Recipe {
-  id: string;
-  title: string;
-  description: string;
-  image: string;
-  preparationTime: number;
-  cookingTime: number;
-  servings: number;
-  difficulty: string;
-  calories: number;
-  rating: number;
-  ratingCount: number;
-  author: {
-    id: string;
-    name: string;
-    avatar: string;
-  };
-  ingredients: Ingredient[];
-  steps: Step[];
-  tips: string[];
-  isFavorite: boolean;
-  category: string;
-  tags: string[];
+  replies: ReviewReply[];
 }
 
 interface RelatedRecipe {
@@ -103,87 +78,11 @@ interface RelatedRecipe {
   rating: number;
 }
 
-// Timer component
-const Timer: React.FC<{ minutes: number }> = ({ minutes }) => {
-  const [timeLeft, setTimeLeft] = useState(minutes * 60);
-  const [isActive, setIsActive] = useState(false);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  useEffect(() => {
-    if (isActive && timeLeft > 0) {
-      intervalRef.current = setInterval(() => {
-        setTimeLeft(prev => prev - 1);
-      }, 1000);
-    } else if (timeLeft === 0) {
-      setIsActive(false);
-    }
-
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [isActive, timeLeft]);
-
-  const formatTime = () => {
-    const hours = Math.floor(timeLeft / 3600);
-    const minutes = Math.floor((timeLeft % 3600) / 60);
-    const seconds = timeLeft % 60;
-
-    return `${hours > 0 ? `${hours}:` : ''}${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  };
-
-  const toggleTimer = () => {
-    setIsActive(!isActive);
-  };
-
-  const resetTimer = () => {
-    setIsActive(false);
-    setTimeLeft(minutes * 60);
-  };
-
-  const progress = 100 - ((timeLeft / (minutes * 60)) * 100);
-
-  return (
-    <motion.div 
-      className="bg-white p-4 rounded-xl shadow-md flex flex-col items-center"
-      whileHover={{ y: -5 }}
-      transition={{ duration: 0.3 }}
-    >
-      <Typography variant="h6" className="font-semibold mb-3">
-        Cooking Timer
-      </Typography>
-      
-      <div className="relative mb-4">
-        <CircularProgress 
-          variant="determinate" 
-          value={progress} 
-          size={100} 
-          thickness={4} 
-          className="text-amber-500"
-        />
-        <div className="absolute inset-0 flex items-center justify-center">
-          <Typography variant="h5" className="font-mono">
-            {formatTime()}
-          </Typography>
-        </div>
-      </div>
-      
-      <div className="flex space-x-2">
-        <IconButton 
-          onClick={toggleTimer}
-          className={isActive ? "bg-red-100 hover:bg-red-200" : "bg-green-100 hover:bg-green-200"}
-        >
-          {isActive ? <Pause /> : <PlayArrow />}
-        </IconButton>
-        
-        <IconButton 
-          onClick={resetTimer}
-          className="bg-gray-100 hover:bg-gray-200"
-        >
-          <Refresh />
-        </IconButton>
-      </div>
-    </motion.div>
-  );
+const API_BASE_URL = 'http://localhost:8000';
+const API_ENDPOINTS = {
+  recipeDetail: (id: string) => `${API_BASE_URL}/api/recipes/${id}/`,
+  relatedRecipes: (categoryId: string) => `${API_BASE_URL}/api/recipes/?category=${categoryId}`,
+  recipeReviews: (id: string) => `${API_BASE_URL}/api/recipes/${id}/review/`,
 };
 
 const RecipeDetails: React.FC = () => {
@@ -193,82 +92,131 @@ const RecipeDetails: React.FC = () => {
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [relatedRecipes, setRelatedRecipes] = useState<RelatedRecipe[]>([]);
   const [selectedTab, setSelectedTab] = useState(0);
+  const [username, setUsername] = useState('');
   const [newComment, setNewComment] = useState('');
   const [userRating, setUserRating] = useState<number | null>(null);
+  const [allReviews, setAllReviews] = useState<Review[]>([]);
+  const [ratingPercentages, setRatingPercentages] = useState<{ [key: number]: number }>({});
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [showNutritionDialog, setShowNutritionDialog] = useState(false);
+  const [expandedReplies, setExpandedReplies] = useState<{[key: string]: boolean}>({});
+  const [replyTexts, setReplyTexts] = useState<{[key: string]: string}>({});
+  const [showReplyForm, setShowReplyForm] = useState<{[key: string]: boolean}>({});
+  const [submittingReview, setSubmittingReview] = useState(false);
 
-  // Mock data - in a real app, fetch from API
-  useEffect(() => {
-    // Simulate API call
-    setTimeout(() => {
-      const mockRecipe: Recipe = {
-        id: recipeId || 'recipe-1',
-        title: 'Homemade Pancakes with Fresh Berries',
-        description: 'Light and fluffy pancakes made from scratch, served with a medley of fresh berries and a drizzle of pure maple syrup. This classic breakfast treat is perfect for weekend brunches or special morning occasions.',
-        image: spaghetti,
-        preparationTime: 15,
-        cookingTime: 20,
-        servings: 4,
-        difficulty: 'Easy',
-        calories: 320,
-        rating: 4.7,
-        ratingCount: 128,
-        author: {
-          id: 'user-1',
-          name: 'Chef Maria',
-          avatar: spaghetti
+  const fetchRecipe = async () => {
+      setLoading(true);
+      try {
+        // Fetch recipe details
+        const res = await axios.get(API_ENDPOINTS.recipeDetail(recipeId!));
+        const data = res.data;
+
+        setRecipe({
+          id: data.id,
+          title: data.title,
+          description: data.description,
+          image: data.image || '/api/placeholder/400/300',
+          preparationTime: data.preparation_time,
+          cookingTime: data.cooking_time,
+          servings: data.servings,
+          difficulty: data.difficulty,
+          calories: data.calories,
+          rating: Number(data.average_rating) || 0,
+          ratingCount: data.rating_count || 0,
+          author: {
+            id: data.author?.id,
+            name: data.author?.username || data.author?.name || 'Chef',
+            avatar: data.author?.profile_picture || '/api/placeholder/50/50',
+          },
+          ingredients: (data.ingredients || []).map((ing: any) => ({
+            id: ing.id,
+            name: ing.name,
+            amount: ing.amount,
+            checked: false,
+          })),
+          steps: (data.steps || []).map((step: any) => ({
+            id: step.id,
+            description: step.description,
+            image: step.image,
+          })),
+          tips: (data.tips || []).map((tip: any) => tip.description || tip.tip || ''),
+          isFavorite: data.is_favorited || false,
+          category: data.category?.name || data.category || '',
+          tags: (data.tags || []).map((tag: any) => tag.name || tag),
+        });
+
+        // Fetch related recipes (by category id)
+        if (data.category?.id) {
+          const relatedRes = await axios.get(API_BASE_URL + `/api/recipes/?category=${data.category.id}`);
+          setRelatedRecipes(
+            (relatedRes.data.results || relatedRes.data)
+              .filter((r: any) => r.id !== data.id)
+              .slice(0, 4)
+              .map((r: any) => ({
+                id: r.id,
+                title: r.title,
+                image: r.image || '/api/placeholder/400/300',
+                cookingTime: r.cooking_time || 0,
+                rating: Number(r.average_rating) || 0,
+              }))
+          );
+        } else {
+          setRelatedRecipes([]);
+        }
+      } catch (error: any) {
+        console.log('Error fetching recipe details:', error);
+        navigate('/not-found');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+  const fetchReviews = async () => {
+  try {
+    const res = await axios.get(API_ENDPOINTS.recipeReviews(recipeId!));
+    setAllReviews(
+      (res.data.results || []).map((item: any, idx: number) => ({
+        id: item.id || `review-${idx}`,
+        user: {
+          name: item.username || item.user?.name || 'Anonymous',
+          avatar: item.user?.avatar || '/api/placeholder/400/300'
         },
-        ingredients: [
-          { id: 'ing-1', name: 'All-purpose flour', amount: '2 cups', checked: false },
-          { id: 'ing-2', name: 'Baking powder', amount: '2 tsp', checked: false },
-          { id: 'ing-3', name: 'Salt', amount: '1/2 tsp', checked: false },
-          { id: 'ing-4', name: 'Granulated sugar', amount: '3 tbsp', checked: false },
-          { id: 'ing-5', name: 'Milk', amount: '1 1/2 cups', checked: false },
-          { id: 'ing-6', name: 'Eggs', amount: '2 large', checked: false },
-          { id: 'ing-7', name: 'Butter, melted', amount: '1/4 cup', checked: false },
-          { id: 'ing-8', name: 'Vanilla extract', amount: '1 tsp', checked: false },
-          { id: 'ing-9', name: 'Fresh berries (blueberries, strawberries, raspberries)', amount: '2 cups', checked: false },
-          { id: 'ing-10', name: 'Maple syrup', amount: 'For serving', checked: false },
-        ],
-        steps: [
-          { id: 'step-1', description: 'In a large bowl, whisk together the flour, baking powder, salt, and sugar.' },
-          { id: 'step-2', description: 'In a separate bowl, whisk together the milk, eggs, melted butter, and vanilla extract.' },
-          { id: 'step-3', description: 'Pour the wet ingredients into the dry ingredients and stir just until combined. Do not overmix; a few lumps are okay.' },
-          { id: 'step-4', description: 'Let the batter rest for 10 minutes while you heat a large non-stick skillet or griddle over medium heat.' },
-          { id: 'step-5', description: 'Lightly grease the skillet with butter or cooking spray. Pour 1/4 cup of batter onto the skillet for each pancake.' },
-          { id: 'step-6', description: 'Cook until bubbles form on the surface and the edges look dry, about 2-3 minutes. Flip and cook for another 1-2 minutes until golden brown.' },
-          { id: 'step-7', description: 'Transfer to a warm plate and repeat with the remaining batter.' },
-          { id: 'step-8', description: 'Serve warm with fresh berries and maple syrup.' },
-        ],
-        tips: [
-          'For extra fluffy pancakes, separate the eggs and whip the whites before folding them into the batter.',
-          'If you don\'t have fresh berries, thawed frozen berries work well too.',
-          'The batter can be made the night before and refrigerated for a quicker morning prep.',
-          'Use a 1/4 cup measuring cup for consistent pancake size.',
-        ],
-        isFavorite: false,
-        category: 'breakfast',
-        tags: ['breakfast', 'pancakes', 'berries', 'brunch', 'sweet']
-      };
+        date: formatDate(item.created_at),
+        rating: Number(item.rating || item.value),
+        content: item.review || item.text,
+        replies: []
+      }))
+    );
+    setRatingPercentages(res.data.rating_percentages || {});
+  } catch (err) {
+    setAllReviews([]);
+    setRatingPercentages({});
+  }
+};
 
-      const mockRelatedRecipes: RelatedRecipe[] = Array(4).fill(null).map((_, index) => ({
-        id: `related-${index}`,
-        title: `Related ${mockRecipe.category} Recipe ${index + 1}`,
-        image: spaghetti,
-        cookingTime: Math.floor(Math.random() * 50) + 10,
-        rating: 3 + Math.random() * 2,
-      }));
+  const formatDate = (dateString: string) => {
+    if (!dateString) return 'Just now';
+    
+    const now = new Date();
+    const date = new Date(dateString);
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    
+    if (diffInSeconds < 60) return 'Just now';
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
+    if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 86400)} days ago`;
+    
+    return date.toLocaleDateString();
+  };
 
-      setRecipe(mockRecipe);
-      setRelatedRecipes(mockRelatedRecipes);
-      setLoading(false);
-    }, 1500);
-  }, [recipeId]);
+  useEffect(() => {
+    fetchRecipe();
+    fetchReviews();
+    // eslint-disable-next-line
+  }, [recipeId, navigate]);
 
   const toggleIngredientCheck = (id: string) => {
     if (!recipe) return;
-    
     setRecipe({
       ...recipe,
       ingredients: recipe.ingredients.map(ing => 
@@ -289,28 +237,111 @@ const RecipeDetails: React.FC = () => {
     setSelectedTab(newValue);
   };
 
-  const handleCommentSubmit = (e: React.FormEvent) => {
+  const handleCommentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newComment || !userRating) return;
-    
-    // In a real app, you would send this to your API
-    console.log('Comment submitted:', { comment: newComment, rating: userRating });
-    
-    // Reset form
-    setNewComment('');
-    setUserRating(null);
-    
-    // Show success message or update UI
-    alert('Thank you for your review!');
+    if (!username || !userRating || !newComment || submittingReview) return;
+
+    setSubmittingReview(true);
+    try {
+      const response = await axios.post(API_ENDPOINTS.recipeReviews(recipeId!), {
+        username,
+        rating: userRating,
+        review: newComment,
+      });
+
+      if (response.status === 201) {
+        // Create the new review object to add to state immediately
+        const newReview: Review = {
+          id: `temp-${Date.now()}`, // Temporary ID
+          user: {
+            name: username,
+            avatar: '/api/placeholder/400/300'
+          },
+          date: 'Just now',
+          rating: userRating,
+          content: newComment,
+          replies: []
+        };
+
+        // Add the new review to the beginning of the list
+        setAllReviews(prev => [newReview, ...prev]);
+        
+        // Update recipe rating count immediately
+        if (recipe) {
+          setRecipe({
+            ...recipe,
+            ratingCount: recipe.ratingCount + 1,
+            // Optionally recalculate average rating
+            rating: ((recipe.rating * recipe.ratingCount) + userRating) / (recipe.ratingCount + 1)
+          });
+        }
+
+        // Reset form
+        setUserRating(null);
+        setUsername('');
+        setNewComment('');
+        toast.success('Review submitted successfully!');
+      }
+    } catch (err: any) {
+      console.error('Error submitting review:', err);
+      toast.error(err.response?.data?.detail || 'Failed to submit review.');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  const handleReplySubmit = async (reviewId: string) => {
+  const replyText = replyTexts[reviewId];
+  if (!replyText || !username) return;
+
+  try {
+    const response = await axios.post(
+      `${API_BASE_URL}/api/recipes/${recipeId}/comments/${reviewId}/reply/`,
+      {
+        username,
+        text: replyText,
+      }
+    );
+
+    if (response.status === 201) {
+      const reply = response.data.reply;
+      // Add the new reply to the UI
+      setAllReviews(prev =>
+        prev.map(review =>
+          review.id === reviewId
+            ? { ...review, replies: [...review.replies, reply] }
+            : review
+        )
+      );
+      toast.success('Reply added!');
+    }
+  } catch (err) {
+    toast.error('Failed to add reply.');
+  } finally {
+    setReplyTexts(prev => ({ ...prev, [reviewId]: '' }));
+    setShowReplyForm(prev => ({ ...prev, [reviewId]: false }));
+  }
+};
+
+  const toggleReplies = (reviewId: string) => {
+    setExpandedReplies(prev => ({
+      ...prev,
+      [reviewId]: !prev[reviewId]
+    }));
+  };
+
+  const toggleReplyForm = (reviewId: string) => {
+    setShowReplyForm(prev => ({
+      ...prev,
+      [reviewId]: !prev[reviewId]
+    }));
   };
 
   const handleShareRecipe = (platform: string) => {
     if (!recipe) return;
-    
     const recipeUrl = window.location.href;
     const recipeTitle = recipe.title;
     const recipeDescription = recipe.description.substring(0, 100) + '...';
-    
     switch (platform) {
       case 'Facebook':
         window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(recipeUrl)}`, '_blank');
@@ -330,8 +361,7 @@ const RecipeDetails: React.FC = () => {
       case 'Copy Link':
         navigator.clipboard.writeText(recipeUrl)
           .then(() => {
-            // Show success message
-            alert('Recipe link copied to clipboard!');
+            toast.success('Recipe link copied to clipboard!');
           })
           .catch(err => {
             console.error('Failed to copy link: ', err);
@@ -340,35 +370,23 @@ const RecipeDetails: React.FC = () => {
       default:
         console.log(`Sharing to ${platform} not implemented yet`);
     }
-    
-    // Log analytics event
-    console.log(`Recipe shared to ${platform}`);
-    // Close the dialog
     setShowShareDialog(false);
   };
 
   const handlePrintRecipe = () => {
-    // In a real app, implement print functionality
-    console.log('Printing recipe');
     window.print();
   };
 
   const handleDownloadPdf = async () => {
     if (!recipe) return;
-    
     try {
-      // Show loading state
       setLoading(true);
-      
-      // Create a new container to render the recipe content for PDF
       const pdfContainer = document.createElement('div');
       pdfContainer.className = 'pdf-container';
       pdfContainer.style.width = '700px';
       pdfContainer.style.padding = '20px';
       pdfContainer.style.position = 'absolute';
       pdfContainer.style.left = '-9999px';
-      
-      // Add recipe content
       pdfContainer.innerHTML = `
         <div style="text-align: center; margin-bottom: 20px;">
           <h1 style="font-size: 24px; color: #333;">${recipe.title}</h1>
@@ -416,92 +434,39 @@ const RecipeDetails: React.FC = () => {
           <p>Downloaded from PerfectRecipe.com on ${new Date().toLocaleDateString()}</p>
         </div>
       `;
-      
-      // Add container to body
       document.body.appendChild(pdfContainer);
-      
-      // Generate PDF using html2canvas and jsPDF
       const canvas = await html2canvas(pdfContainer, {
         scale: 2,
         useCORS: true,
         logging: false
       });
-      
-      // Configure PDF
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
         format: 'a4'
       });
-      
-      // Calculate dimensions
-      const imgWidth = 210; // A4 width in mm
+      const imgWidth = 210;
       const imgHeight = canvas.height * imgWidth / canvas.width;
-      
       let position = 0;
       pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      
-      // If content is longer than the page, add new pages
-      const pageHeight = 297; // A4 height in mm
-      
+      const pageHeight = 297;
       while (position < imgHeight) {
         position += pageHeight - 10;
         pdf.addPage();
         pdf.addImage(imgData, 'PNG', 0, -position, imgWidth, imgHeight);
       }
-      
-      // Save the PDF
       pdf.save(`${recipe.title.replace(/\s+/g, '-').toLowerCase()}.pdf`);
-      
-      // Clean up
       document.body.removeChild(pdfContainer);
-      
-      // Log analytics event
-      console.log('Recipe PDF downloaded');
-      
     } catch (error) {
       console.error('Error generating PDF:', error);
-      alert('Failed to generate PDF. Please try again later.');
+      toast.error('Failed to generate PDF. Please try again later.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleChatWithAuthor = () => {
-    if (!recipe) return;
-    navigate(`/chat/${recipe.author.id}`);
-  };
-
-  // Comments data
-  const comments: Comment[] = [
-    {
-      id: 'comment-1',
-      user: {
-        name: 'Jessica Smith',
-        avatar: spaghetti
-      },
-      date: '2 weeks ago',
-      rating: 5,
-      content: 'These pancakes were amazing! So fluffy and delicious. My family loved them and has requested I make them again this weekend.',
-      likes: 12,
-      isLiked: false
-    },
-    {
-      id: 'comment-2',
-      user: {
-        name: 'Michael Johnson',
-        avatar: spaghetti
-      },
-      date: '1 month ago',
-      rating: 4,
-      content: 'Great recipe! I added a bit of cinnamon to the batter and it turned out wonderful. Will definitely make again.',
-      likes: 8,
-      isLiked: true
-    }
-  ];
-
-  // Nutrition data
+  // Nutrition data (static for now)
   const nutritionInfo = {
     calories: 320,
     protein: '8g',
@@ -542,15 +507,12 @@ const RecipeDetails: React.FC = () => {
           <div className="lg:col-span-2">
             <Skeleton variant="text" height={80} className="mb-4" />
             <Skeleton variant="text" height={60} className="mb-6" />
-            
             <div className="flex gap-4 mb-8">
               {Array(4).fill(null).map((_, i) => (
                 <Skeleton key={i} variant="rectangular" width={80} height={36} className="rounded-md" />
               ))}
             </div>
-            
             <Skeleton variant="rectangular" height={200} className="mb-8 rounded-lg" />
-            
             <div className="mb-8">
               <Skeleton variant="text" height={40} className="mb-4" />
               {Array(5).fill(null).map((_, i) => (
@@ -558,7 +520,6 @@ const RecipeDetails: React.FC = () => {
               ))}
             </div>
           </div>
-          
           <div>
             <Skeleton variant="rectangular" height={400} className="rounded-lg" />
           </div>
@@ -732,14 +693,6 @@ const RecipeDetails: React.FC = () => {
                   Professional Chef
                 </Typography>
               </div>
-              <Button 
-                variant="contained" 
-                startIcon={<Message />}
-                onClick={handleChatWithAuthor}
-                sx={{backgroundColor: '#D97706'}}
-              >
-                Chat
-              </Button>
             </motion.div>
             
             {/* Recipe Description */}
@@ -836,32 +789,24 @@ const RecipeDetails: React.FC = () => {
                     </Button>
                   </div>
                   
-                  <ul className="space-y-2">
-                    {recipe.ingredients.map(ingredient => (
+                  <ul className="space-y-4">
+                    {recipe.ingredients.map((ingredient) => (
                       <motion.li 
                         key={ingredient.id}
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
-                        className="flex items-center p-3 bg-white rounded-lg shadow-sm"
+                        className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50"
                       >
-                        <Checkbox 
+                        <Checkbox
                           checked={ingredient.checked}
                           onChange={() => toggleIngredientCheck(ingredient.id)}
                           className="text-amber-500"
                         />
-                        <div className="flex-1">
-                          <Typography 
-                            variant="body1" 
-                            className={ingredient.checked ? "line-through text-gray-400" : ""}
-                          >
-                            {ingredient.name}
-                          </Typography>
-                        </div>
                         <Typography 
-                          variant="body2" 
-                          className={`mr-2 ${ingredient.checked ? "text-gray-400" : "text-gray-600"}`}
+                          variant="body1"
+                          className={ingredient.checked ? 'line-through text-gray-500' : ''}
                         >
-                          {ingredient.amount}
+                          {ingredient.amount} {ingredient.name}
                         </Typography>
                       </motion.li>
                     ))}
@@ -876,30 +821,14 @@ const RecipeDetails: React.FC = () => {
                   animate={{ opacity: 1 }}
                   className="py-4"
                 >
-                  <div className="mb-8">
-                    <TitleText title='Reviews & Ratings'/>
-                    
-                    <div className="flex items-end gap-4 mt-4">
-                      <div className="text-center">
-                        <Typography variant="h2" className="text-amber-500 font-bold">
-                          {recipe.rating.toFixed(1)}
-                        </Typography>
-                        <Rating value={recipe.rating} readOnly precision={0.5} size="large" />
-                        <Typography variant="body2" className="text-gray-600 mt-1">
-                          {recipe.ratingCount} reviews
-                        </Typography>
-                      </div>
-                      
-                      <div className="flex-1 pl-6 border-l">
+                  <div className="flex justify-between items-center mb-6">
+                    <TitleText title={`Reviews (${allReviews.length})`}/>
+                  </div>
+
+                  <div className="flex-1 pl-6 border-l">
                         <div className="space-y-1">
                           {[5, 4, 3, 2, 1].map(stars => {
-                            // Calculate percentage (mock data for demonstration)
-                            const percentage = 
-                              stars === 5 ? 65 : 
-                              stars === 4 ? 25 : 
-                              stars === 3 ? 7 : 
-                              stars === 2 ? 2 : 1;
-                            
+                            const percentage = ratingPercentages[stars] || 0;
                             return (
                               <div key={stars} className="flex items-center gap-2">
                                 <div className="flex items-center w-16">
@@ -920,199 +849,259 @@ const RecipeDetails: React.FC = () => {
                           })}
                         </div>
                       </div>
-                    </div>
-                  </div>
-                  
-                  {/* Add Review */}
+        
+                  {/* Write Review Form */}
                   <div className="bg-gray-50 p-6 rounded-lg mb-8">
-                    <Typography variant="h6" className="mb-4">Leave a Review</Typography>
-                    <form onSubmit={handleCommentSubmit}>
-                      <div className="mb-4">
-                        <Typography>Your Rating</Typography>
-                        <Rating 
-                          value={userRating} 
-                          onChange={(_, value) => setUserRating(value)}
+                    <Typography variant="h6" className="mb-4">Write a Review</Typography>
+                    <form onSubmit={handleCommentSubmit} className="space-y-4">
+                      <TextField
+                        fullWidth
+                        label="Your Name"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        required
+                        variant="outlined"
+                      />
+                      
+                      <div>
+                        <Typography component="legend" className="mb-2">Rating</Typography>
+                        <Rating
+                          value={userRating}
+                          onChange={(event, newValue) => setUserRating(newValue)}
                           size="large"
+                          className="text-amber-500"
                         />
                       </div>
-                      <TextField 
+                      
+                      <TextField
+                        fullWidth
                         label="Your Review"
                         multiline
                         rows={4}
                         value={newComment}
                         onChange={(e) => setNewComment(e.target.value)}
-                        fullWidth
+                        required
                         variant="outlined"
-                        className="mb-4"
                       />
-                      <Button 
+                      
+                      <Button
                         type="submit"
                         variant="contained"
-                        color="primary"
-                        disabled={!newComment || !userRating}
+                        disabled={!username || !userRating || !newComment || submittingReview}
+                        startIcon={submittingReview ? <CircularProgress size={20} /> : <Message />}
+                        className="bg-amber-500 hover:bg-amber-600"
                       >
-                        Submit Review
+                        {submittingReview ? 'Submitting...' : 'Submit Review'}
                       </Button>
                     </form>
                   </div>
                   
-                  {/* Comments List */}
+                  {/* Reviews List */}
                   <div className="space-y-6">
-                    {comments.map(comment => (
-                      <div key={comment.id} className="bg-white p-4 rounded-lg shadow-sm">
-                        <div className="flex justify-between">
-                          <div className="flex items-center gap-3">
-                            <Avatar src={comment.user.avatar} alt={comment.user.name} />
-                            <div>
-                              <Typography variant="subtitle1" className="font-medium">
-                                {comment.user.name}
-                              </Typography>
-                              <Typography variant="caption" className="text-gray-500">
-                                {comment.date}
-                              </Typography>
+                    {allReviews.length === 0 ? (
+                      <div className="text-center py-12">
+                        <Message className="text-gray-400 mb-4" style={{ fontSize: 48 }} />
+                        <Typography variant="h6" className="text-gray-500 mb-2">
+                          No reviews yet
+                        </Typography>
+                        <Typography variant="body2" className="text-gray-400">
+                          Be the first to share your thoughts about this recipe!
+                        </Typography>
+                      </div>
+                    ) : (
+                      allReviews.map((review) => (
+                        <motion.div
+                          key={review.id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="bg-white p-6 rounded-lg shadow-sm border border-gray-100"
+                        >
+                          {/* Review Header */}
+                          <div className="flex items-start justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                              <Avatar src={review.user.avatar} alt={review.user.name} />
+                              <div>
+                                <Typography variant="subtitle1" className="font-medium">
+                                  {review.user.name}
+                                </Typography>
+                                <div className="flex items-center gap-2">
+                                  <Rating value={review.rating} readOnly size="small" className="text-amber-400" />
+                                  <Typography variant="caption" className="text-gray-500">
+                                    {review.date}
+                                  </Typography>
+                                </div>
+                              </div>
                             </div>
                           </div>
-                          <Rating value={comment.rating} readOnly size="small" />
-                        </div>
-                        <Typography variant="body1" className="my-4">
-                          {comment.content}
-                        </Typography>
-                        <div className="flex items-center gap-2">
-                          <IconButton 
-                            size="small"
-                            className={comment.isLiked ? "text-red-500" : ""}
-                          >
-                            {comment.isLiked ? <Favorite fontSize="small" /> : <FavoriteBorder fontSize="small" />}
-                          </IconButton>
-                          <Typography variant="body2" className="text-gray-600">
-                            {comment.likes}
+                          
+                          {/* Review Content */}
+                          <Typography variant="body1" className="mb-4">
+                            {review.content}
                           </Typography>
-                        </div>
-                        </div>
-                    ))}
+                          
+                          {/* Review Actions */}
+                          <div className="flex items-center gap-4 pt-2 border-t border-gray-100">
+                            <Button
+                              size="small"
+                              startIcon={<Reply />}
+                              onClick={() => toggleReplyForm(review.id)}
+                              className="text-gray-600"
+                            >
+                              Reply
+                            </Button>
+                            
+                            {review.replies.length > 0 && (
+                              <Button
+                                size="small"
+                                startIcon={expandedReplies[review.id] ? <ExpandLess /> : <ExpandMore />}
+                                onClick={() => toggleReplies(review.id)}
+                                className="text-gray-600"
+                              >
+                                {expandedReplies[review.id] ? 'Hide' : 'Show'} {review.replies.length} {review.replies.length === 1 ? 'Reply' : 'Replies'}
+                              </Button>
+                            )}
+                          </div>
+                          
+                          {/* Reply Form */}
+                          <Collapse in={showReplyForm[review.id]}>
+                            <div className="mt-4 pl-4 border-l-2 border-gray-200">
+                              <div className="flex gap-3">
+                                <Avatar size="small" />
+                                <div className="flex-1">
+                                  <TextField
+                                    fullWidth
+                                    placeholder="Write a reply..."
+                                    multiline
+                                    rows={2}
+                                    value={replyTexts[review.id] || ''}
+                                    onChange={(e) => setReplyTexts(prev => ({
+                                      ...prev,
+                                      [review.id]: e.target.value
+                                    }))}
+                                    variant="outlined"
+                                    size="small"
+                                  />
+                                  <div className="flex gap-2 mt-2">
+                                    <Button
+                                      size="small"
+                                      variant="contained"
+                                      onClick={() => handleReplySubmit(review.id)}
+                                      disabled={!replyTexts[review.id] || !username}
+                                      className="bg-amber-500 hover:bg-amber-600"
+                                    >
+                                      Reply
+                                    </Button>
+                                    <Button
+                                      size="small"
+                                      onClick={() => toggleReplyForm(review.id)}
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </Collapse>
+                          
+                          {/* Replies */}
+                          <Collapse in={expandedReplies[review.id]}>
+                            <div className="mt-4 space-y-4">
+                              {review.replies.map((reply) => (
+                                <div key={reply.id} className="pl-4 border-l-2 border-gray-200">
+                                  <div className="flex items-start gap-3">
+                                    <Avatar src={reply.user.avatar} alt={reply.user.name} size="small" />
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <Typography variant="subtitle2" className="font-medium">
+                                          {reply.user.name}
+                                        </Typography>
+                                        <Typography variant="caption" className="text-gray-500">
+                                          {reply.date}
+                                        </Typography>
+                                      </div>
+                                      <Typography variant="body2">
+                                        {reply.content}
+                                      </Typography>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </Collapse>
+                        </motion.div>
+                      ))
+                    )}
                   </div>
                 </motion.div>
               )}
             </Box>
-            
-            {/* Related Recipes */}
-            <div className="mt-16">
-              <TitleText  title="You Might Also Like"/>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-6">
-                {relatedRecipes.map(relatedRecipe => (
-                  <motion.div
-                    key={relatedRecipe.id}
-                    whileHover={{ y: -8 }}
-                    className="bg-white rounded-xl overflow-hidden shadow-md"
-                  >
-                    <img 
-                      src={relatedRecipe.image} 
-                      alt={relatedRecipe.title}
-                      className="w-full h-48 object-cover"
-                    />
-                    <div className="p-4">
-                      <Typography variant="h6" className="mb-2">
-                        {relatedRecipe.title}
-                      </Typography>
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center">
-                          <AccessTime fontSize="small" className="text-gray-500 mr-1" />
-                          <Typography variant="body2" className="text-gray-500">
-                            {relatedRecipe.cookingTime} min
-                          </Typography>
-                        </div>
-                        <Rating value={relatedRecipe.rating} readOnly size="small" />
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            </div>
           </div>
           
           {/* Sidebar */}
-          <div className="space-y-8">
-            {/* Timer Widget */}
-            <Timer minutes={recipe.cookingTime} />
-            
-            {/* Servings Adjuster */}
-            <motion.div 
-              className="bg-white p-6 rounded-xl shadow-md"
-              whileHover={{ y: -5 }}
-              transition={{ duration: 0.3 }}
-            >
-              <Typography variant="h6" className="font-semibold mb-4">
-                Adjust Servings
-              </Typography>
-              <div className="flex items-center justify-between">
-                <IconButton 
-                  className="bg-amber-100 hover:bg-amber-200"
-                  disabled={recipe.servings <= 1}
-                >
-                  -
-                </IconButton>
-                <Typography variant="h5">{recipe.servings}</Typography>
-                <IconButton className="bg-amber-100 hover:bg-amber-200">
-                  +
-                </IconButton>
-              </div>
-            </motion.div>
-            
-            {/* Similar Categories */}
-            <div className="bg-white p-6 rounded-xl shadow-md">
-              <Typography variant="h6" className="font-semibold mb-4">
-                Similar Categories
-              </Typography>
-              <div className="flex flex-wrap gap-2">
-                {['Breakfast', 'Lunch', 'Baked Foods', 'Desserts', 'Vegetarian'].map(category => (
-                  <Chip 
-                    key={category} 
-                    label={category} 
-                    className="bg-amber-100 hover:bg-amber-200 cursor-pointer"
-                    onClick={() => navigate(`/category/${category.toLowerCase()}`)}
-                  />
-                ))}
-              </div>
+          <div className="lg:col-span-1">
+            {/* Recipe Timer */}
+            <div className="bg-white p-6 rounded-lg shadow-sm mb-8">
+              <TitleText title="Recipe Timer"/>
+              <Timer 
+                minutes={recipe.preparationTime + recipe.cookingTime}
+              />
             </div>
             
-            {/* Video Tutorial Placeholder */}
-            <div className="bg-white p-6 rounded-xl shadow-md">
-              <Typography variant="h6" className="font-semibold mb-4">
-                Video Tutorial
-              </Typography>
-              <div className="relative bg-gray-200 rounded-lg overflow-hidden" style={{ paddingTop: '56.25%' }}>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <IconButton className="bg-white/80 hover:bg-white">
-                    <PlayArrow fontSize="large" />
-                  </IconButton>
+            {/* Related Recipes */}
+            {/* {relatedRecipes.length > 0 && (
+              <div className="bg-white p-6 rounded-lg shadow-sm">
+                <TitleText title="You Might Also Like"/>
+                <div className="space-y-4">
+                  {relatedRecipes.map((relatedRecipe) => (
+                    <motion.div
+                      key={relatedRecipe.id}
+                      whileHover={{ scale: 1.02 }}
+                      className="flex gap-3 p-3 rounded-lg hover:bg-gray-50 cursor-pointer"
+                      onClick={() => navigate(`/recipe/${relatedRecipe.id}`)}
+                    >
+                      <img 
+                        src={relatedRecipe.image}
+                        alt={relatedRecipe.title}
+                        className="w-16 h-16 object-cover rounded-lg"
+                      />
+                      <div className="flex-1">
+                        <Typography variant="subtitle2" className="font-medium mb-1">
+                          {relatedRecipe.title}
+                        </Typography>
+                        <div className="flex items-center gap-2">
+                          <AccessTime className="text-gray-400" style={{ fontSize: 16 }} />
+                          <Typography variant="caption" className="text-gray-600">
+                            {relatedRecipe.cookingTime} min
+                          </Typography>
+                          <Rating value={relatedRecipe.rating} readOnly size="small" className="text-amber-400" />
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
                 </div>
               </div>
-            </div>
+            )} */}
           </div>
         </div>
       </div>
       
       {/* Share Dialog */}
-      <Dialog 
-        open={showShareDialog}
-        onClose={() => setShowShareDialog(false)}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogContent>
+      <Dialog open={showShareDialog} onClose={() => setShowShareDialog(false)}>
+        <DialogContent className="p-6">
           <div className="flex justify-between items-center mb-4">
-            <Typography variant="h6">Share This Recipe</Typography>
+            <Typography variant="h6">Share Recipe</Typography>
             <IconButton onClick={() => setShowShareDialog(false)}>
               <Close />
             </IconButton>
           </div>
-          <div className="grid grid-cols-3 gap-4">
-            {['Facebook', 'Twitter', 'WhatsApp', 'Email', 'Pinterest', 'Copy Link'].map(platform => (
-              <Button 
+          
+          <div className="grid grid-cols-2 gap-3">
+            {['Facebook', 'Twitter', 'WhatsApp', 'Pinterest', 'Email', 'Copy Link'].map((platform) => (
+              <Button
                 key={platform}
                 variant="outlined"
-                className="h-16"
                 onClick={() => handleShareRecipe(platform)}
+                className="p-3"
               >
                 {platform}
               </Button>
@@ -1122,37 +1111,41 @@ const RecipeDetails: React.FC = () => {
       </Dialog>
       
       {/* Nutrition Dialog */}
-      <Dialog
-        open={showNutritionDialog}
-        onClose={() => setShowNutritionDialog(false)}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogContent>
+      <Dialog open={showNutritionDialog} onClose={() => setShowNutritionDialog(false)}>
+        <DialogContent className="p-6">
           <div className="flex justify-between items-center mb-4">
             <Typography variant="h6">Nutrition Information</Typography>
             <IconButton onClick={() => setShowNutritionDialog(false)}>
               <Close />
             </IconButton>
           </div>
-          <Typography variant="subtitle2" className="mb-3 text-gray-500">
-            Per serving
-          </Typography>
-          <div className="space-y-3">
-            {Object.entries(nutritionInfo).map(([key, value]) => (
-              <div key={key} className="flex justify-between border-b pb-2">
-                <Typography variant="body1" className="capitalize">
-                  {key}
-                </Typography>
-                <Typography variant="body1" className="font-medium">
-                  {value}
-                </Typography>
-              </div>
-            ))}
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="text-center p-3 bg-gray-50 rounded-lg">
+              <Typography variant="h6">{nutritionInfo.calories}</Typography>
+              <Typography variant="caption">Calories</Typography>
+            </div>
+            <div className="text-center p-3 bg-gray-50 rounded-lg">
+              <Typography variant="h6">{nutritionInfo.protein}</Typography>
+              <Typography variant="caption">Protein</Typography>
+            </div>
+            <div className="text-center p-3 bg-gray-50 rounded-lg">
+              <Typography variant="h6">{nutritionInfo.carbs}</Typography>
+              <Typography variant="caption">Carbs</Typography>
+            </div>
+            <div className="text-center p-3 bg-gray-50 rounded-lg">
+              <Typography variant="h6">{nutritionInfo.fat}</Typography>
+              <Typography variant="caption">Fat</Typography>
+            </div>
+            <div className="text-center p-3 bg-gray-50 rounded-lg">
+              <Typography variant="h6">{nutritionInfo.sugar}</Typography>
+              <Typography variant="caption">Sugar</Typography>
+            </div>
+            <div className="text-center p-3 bg-gray-50 rounded-lg">
+              <Typography variant="h6">{nutritionInfo.fiber}</Typography>
+              <Typography variant="caption">Fiber</Typography>
+            </div>
           </div>
-          <Typography variant="caption" className="block mt-4 text-gray-500">
-            * Percent Daily Values are based on a 2,000 calorie diet. Your daily values may be higher or lower depending on your calorie needs.
-          </Typography>
         </DialogContent>
       </Dialog>
     </motion.div>
