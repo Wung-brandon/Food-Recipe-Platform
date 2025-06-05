@@ -17,10 +17,6 @@ import {
   CircularProgress
 } from '@mui/material';
 import { 
-  Dashboard as DashboardIcon,
-  Bookmark as BookmarkIcon, 
-  Restaurant as RestaurantIcon,
-  Favorite as FavoriteIcon,
   Search as SearchIcon,
   TrendingUp as TrendingUpIcon,
   Star as StarIcon,
@@ -49,13 +45,6 @@ const UserDashboard: React.FC = () => {
   const [tabValue, setTabValue] = useState(0);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-
-  const navItems = [
-    { icon: <DashboardIcon />, text: 'Dashboard', path: '/user-dashboard' },
-    { icon: <RestaurantIcon />, text: 'Recipes', path: '/recipes' },
-    { icon: <BookmarkIcon />, text: 'Saved', path: '/saved-recipes' },
-    { icon: <FavoriteIcon />, text: 'Favorites', path: '/favorite-recipes' },
-  ];
 
   // Sample recipe data - in a real app, this would come from your API
   const sampleRecipes: Recipe[] = [
