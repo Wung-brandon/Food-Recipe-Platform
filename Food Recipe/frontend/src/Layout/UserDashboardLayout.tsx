@@ -158,18 +158,19 @@ const UserDashboardLayout = ({ children, title }) => {
     return <Navigate to="/login" replace />;
   }
 
-  const chefProfileId = user?.chef_profile?.id;
+  const userId = user?.id;
+  console.log('User ID:', userId);
   
   const navItems = [
     { icon: <DashboardIcon />, text: 'Dashboard', path: '/dashboard/user' },
     { icon: <RestaurantIcon />, text: 'Recipes', path: '/dashboard/user/recipes' },
-    { icon: <FavoriteIcon />, text: 'Favorites', path: '/user-dashboard/favorite-recipes' },
+    { icon: <FavoriteIcon />, text: 'Favorites', path: '/dashboard/user/my-favorites' },
     {
       icon: <PersonIcon />,
       text: 'Profile',
-      path: chefProfileId ? `/user-dashboard/chef/profile/${chefProfileId}` : '/user-dashboard/chef/profile'
+      path: userId ? `/user-dashboard/user/profile/${userId}` : '/dashboard/user/profile'
     },
-    { icon: <SettingsIcon />, text: 'Settings', path: '/dashboard/chef/settings' },
+    { icon: <SettingsIcon />, text: 'Settings', path: '/dashboard/user/settings' },
   ];
   
   const unreadNotificationsCount = notifications.filter(n => !n.read).length;

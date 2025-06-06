@@ -35,6 +35,8 @@ import { ToastContainer } from 'react-toastify';
 import { AuthProvider } from './context/AuthContext'
 // import 'bootstrap/dist/css/bootstrap.min.css';
 
+import UserProfileDashboardPage from './pages/Dashboard/UserDashboard/UserProfilePage';
+import FavoriteRecipe from './pages/Dashboard/UserDashboard/FavoriteRecipe';
 import ChefDashboard from './pages/Dashboard/ChefDashboard/ChefDashboard';
 import UserDashboard from './pages/Dashboard/UserDashboard/UserDashboard';
 import ChefRecipes from './pages/Dashboard/ChefDashboard/ChefRecipe';
@@ -99,6 +101,8 @@ function App() {
                 <Route path='orders' element={<OrderHistoryPage />} />
                 <Route path='meal-planner' element={<MealPlannerPage />} />
                 <Route path='/dashboard/user/recipes' element={<RecipesPage />} />
+                <Route path='/dashboard/user/profile' element={<UserProfileDashboardPage />} />
+                <Route path='/dashboard/user/my-favorites' element={<FavoriteRecipe />} />
                 <Route path='profile' element={<ProfilePage />} />
               
             </Routes>

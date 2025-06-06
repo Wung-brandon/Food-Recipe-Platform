@@ -236,9 +236,6 @@ class UserFavoritesView(generics.ListAPIView):
             like_count=Count('likes', distinct=True)
         )
 
-
-
-
 class CommentListCreateView(generics.ListCreateAPIView):
     serializer_class = CommentSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
@@ -276,8 +273,8 @@ class RateRecipeView(generics.CreateAPIView):
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
-def toggle_favorite(request, recipe_slug):
-    recipe = get_object_or_404(Recipe, slug=recipe_slug)
+def toggle_favorite(request, recipe_id):
+    recipe = get_object_or_404(Recipe, id=recipe_id)
     favorite, created = FavoriteRecipe.objects.get_or_create(
         user=request.user,
         recipe=recipe
@@ -293,8 +290,8 @@ def toggle_favorite(request, recipe_slug):
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
-def toggle_like(request, recipe_slug):
-    recipe = get_object_or_404(Recipe, slug=recipe_slug)
+def toggle_like(request, recipe_id):
+    recipe = get_object_or_404(Recipe, id=recipe_id)
     like, created = LikedRecipe.objects.get_or_create(
         user=request.user,
         recipe=recipe

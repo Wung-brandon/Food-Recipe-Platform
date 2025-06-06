@@ -30,15 +30,20 @@ import axios from 'axios';
 interface Recipe {
   id: number;
   title: string;
-  image_url: string;
-  prep_time: number;
-  cook_time: number;
-  rating: number;
+  image: string;
+  preparation_time: number;
+  cooking_time: number;
+  average_rating: number;
   author: {
     username: string;
     is_chef: boolean;
   };
 }
+
+const API_BASE_URL = 'http://localhost:8000';
+const API_ENDPOINTS = {
+  recipes: `${API_BASE_URL}/api/recipes/`,
+};
 
 const UserDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -46,76 +51,20 @@ const UserDashboard: React.FC = () => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Sample recipe data - in a real app, this would come from your API
-  const sampleRecipes: Recipe[] = [
-    {
-      id: 1,
-      title: 'Pasta Carbonara',
-      image_url: '/api/placeholder/300/200',
-      prep_time: 10,
-      cook_time: 15,
-      rating: 4.8,
-      author: {
-        username: 'chef_mario',
-        is_chef: true
-      }
-    },
-    {
-      id: 2,
-      title: 'Avocado Toast',
-      image_url: '/api/placeholder/300/200',
-      prep_time: 5,
-      cook_time: 5,
-      rating: 4.5,
-      author: {
-        username: 'food_lover',
-        is_chef: false
-      }
-    },
-    {
-      id: 3,
-      title: 'Chicken Stir Fry',
-      image_url: '/api/placeholder/300/200',
-      prep_time: 15,
-      cook_time: 10,
-      rating: 4.6,
-      author: {
-        username: 'chef_sarah',
-        is_chef: true
-      }
-    },
-    {
-      id: 4,
-      title: 'Chocolate Brownies',
-      image_url: '/api/placeholder/300/200',
-      prep_time: 15,
-      cook_time: 25,
-      rating: 4.9,
-      author: {
-        username: 'dessert_master',
-        is_chef: false
-      }
-    }
-  ];
-
   useEffect(() => {
-    // In a real app, you would fetch data from your API
-    // For now, we'll simulate an API call with a timeout
     const fetchData = async () => {
       setLoading(true);
       try {
-        // In a real app: const response = await axios.get('your-api-endpoint');
-        // For demo purposes:
-        setTimeout(() => {
-          setRecipes(sampleRecipes);
-          setLoading(false);
-        }, 1000);
+        const response = await axios.get(API_ENDPOINTS.recipes, { withCredentials: true });
+        // Adjust mapping if your API response structure is different
+        setRecipes(response.data.results || response.data);
       } catch (error) {
         console.error('Error fetching recipes:', error);
+        setRecipes([]);
+      } finally {
         setLoading(false);
       }
     };
-
     fetchData();
   }, []);
 
@@ -128,7 +77,7 @@ const UserDashboard: React.FC = () => {
       <CardMedia
         component="img"
         height="140"
-        image={recipe.image_url}
+        image={recipe.image}
         alt={recipe.title}
       />
       <CardContent sx={{ flexGrow: 1 }}>
@@ -152,13 +101,13 @@ const UserDashboard: React.FC = () => {
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <ScheduleIcon fontSize="small" color="action" />
             <Typography variant="body2" color="text.secondary" sx={{ ml: 0.5 }}>
-              {recipe.prep_time + recipe.cook_time} min
+              {recipe.preparation_time + recipe.cooking_time} min
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <StarIcon fontSize="small" sx={{ color: '#f59e0b' }} />
             <Typography variant="body2" color="text.secondary" sx={{ ml: 0.5 }}>
-              {recipe.rating}
+              {recipe.average_rating}
             </Typography>
           </Box>
         </Box>

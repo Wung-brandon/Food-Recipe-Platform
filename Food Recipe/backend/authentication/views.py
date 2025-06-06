@@ -305,19 +305,39 @@ class GetUserView(RetrieveAPIView):
         return Response(data, status=status.HTTP_200_OK)
 
 class ListCreateUserProfileView(ListCreateAPIView):
-    queryset = UserProfile.objects.all()
+    """
+    List user profiles or create a new profile
+    GET: List all profiles for the authenticated user
+    POST: Create a new profile for the authenticated user
+    """
     serializer_class = UserProfileSerializer
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
-        return Response("Profile Created Successfully", status=status.HTTP_200_OK)
     
     def get_queryset(self):
-        return self.queryset.filter(user=self.request.user).order_by("id")
+        return UserProfile.objects.filter(user=self.request.user).order_by("id")
     
+    def perform_create(self, serializer):
+        # Ensure only one profile per user
+        existing_profile = UserProfile.objects.filter(user=self.request.user).first()
+        if existing_profile:
+            # If profile exists, update it instead of creating new one
+            serializer = UserProfileSerializer(existing_profile, data=self.request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Create new profile
+        serializer.save(user=self.request.user)
+
 class RetrieveUpdateUserProfileView(RetrieveUpdateDestroyAPIView):
+    """
+    Retrieve, update or delete a specific user profile by ID
+    GET: Get profile details
+    PUT/PATCH: Update profile
+    DELETE: Delete profile
+    """
     queryset = UserProfile.objects.all()
     lookup_field = "id"
     serializer_class = UserProfileSerializer
@@ -325,8 +345,18 @@ class RetrieveUpdateUserProfileView(RetrieveUpdateDestroyAPIView):
     parser_classes = [MultiPartParser, FormParser]
     
     def get_queryset(self):
+        # Only allow users to access their own profiles
         return self.queryset.filter(user=self.request.user).order_by("id")
-
+    
+    def get_object(self):
+        """
+        Override to ensure user can only access their own profile
+        """
+        obj = super().get_object()
+        if obj.user != self.request.user:
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied("You can only access your own profile.")
+        return obj
 class RetrieveUpdateChefProfileView(RetrieveUpdateDestroyAPIView):
     queryset = ChefProfile.objects.all()
     lookup_field = "id"

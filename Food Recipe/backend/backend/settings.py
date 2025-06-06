@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     
     "authentication.apps.AuthenticationConfig",
     "recipe.apps.RecipeConfig",
+    "recommendations.apps.RecommendationsConfig",
     
     "rest_framework",
     "corsheaders",

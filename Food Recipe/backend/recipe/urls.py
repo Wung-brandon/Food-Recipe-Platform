@@ -26,6 +26,8 @@ urlpatterns = [
     path('my-recipes/', views.UserRecipesView.as_view(), name='user-recipes'),
     path('my-favorites/', views.UserFavoritesView.as_view(), name='user-favorites'),
     
+    path('recipes/<int:recipe_id>/favorite/', views.toggle_favorite, name='toggle-favorite'),
+    path('recipes/<int:recipe_id>/like/', views.toggle_like, name='toggle-like'),
     # Comment endpoints
     path('recipes/<slug:recipe_slug>/comments/', views.CommentListCreateView.as_view(), name='comment-list'),
     path('recipes/<slug:recipe_slug>/comments/<int:pk>/', views.CommentDetailView.as_view(), name='comment-detail'),
