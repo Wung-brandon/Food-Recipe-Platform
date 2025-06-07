@@ -5,6 +5,7 @@ from . import views
 app_name = 'recipes'
 
 urlpatterns = [
+    
     # Category endpoints
     path('categories/', views.CategoryListCreateView.as_view(), name='category-list'),
     path('categories/<slug:slug>/', views.CategoryDetailView.as_view(), name='category-detail'),
@@ -16,7 +17,9 @@ urlpatterns = [
     # Ingredient endpoints
     path('ingredients/', views.IngredientListCreateView.as_view(), name='ingredient-list'),
     # path('ingredients/<slug:slug>/', views.IngredientDetailView.as_view(), name='ingredient-detail'),
-
+    # ...existing code...
+    path('ingredient-search/', views.ingredient_based_search, name='ingredient-search'),
+# ...existing code...
     # Recipe endpoints
     path('recipes/', views.RecipeListCreateView.as_view(), name='recipe-list'),
     path('recipes/<str:id>/', views.RecipeDetailView.as_view(), name='recipe-detail'),
@@ -41,4 +44,12 @@ urlpatterns = [
     
     # Search endpoint
     path('search/', views.SearchRecipesView.as_view(), name='search-recipes'),
+
+   # Meal Planning endpoints
+    path('meal-plans/', views.MealPlanListCreateView.as_view(), name='meal-plan-list-create'),
+    path('meal-plans/current/', views.UserMealPlanView.as_view(), name='user-current-meal-plan'),
+    path('meal-plans/<int:pk>/', views.MealPlanDetailView.as_view(), name='meal-plan-detail'),
+    path('meal-plans/<int:meal_plan_pk>/entries/', views.MealPlanEntryListCreateView.as_view(), name='meal-plan-entry-list-create'),
+    path('meal-plans/entries/<int:pk>/', views.MealPlanEntryDetailView.as_view(), name='meal-plan-entry-detail'),
+    path('meal-plans/<int:pk>/shopping-list/', views.ShoppingListView.as_view(), name='shopping-list'),
 ]

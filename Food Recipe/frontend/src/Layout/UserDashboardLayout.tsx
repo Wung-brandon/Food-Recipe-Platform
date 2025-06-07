@@ -3,6 +3,9 @@ import { Link, useLocation, useNavigate, useParams, Navigate } from 'react-route
 import { useAuth } from '../context/AuthContext';
 import EmojiNatureIcon from '@mui/icons-material/EmojiNature';
 // Import icons
+import RecommendIcon from '@mui/icons-material/Recommend';
+import KitchenIcon from '@mui/icons-material/Kitchen';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import {
   Dashboard as DashboardIcon,
   Bookmark as BookmarkIcon, 
@@ -170,6 +173,9 @@ const UserDashboardLayout = ({ children, title }) => {
       text: 'Profile',
       path: userId ? `/user-dashboard/user/profile/${userId}` : '/dashboard/user/profile'
     },
+    { icon: <RecommendIcon />, text: 'Recommended for You', path: '/dashboard/user/recommendations' },
+    { icon: <KitchenIcon />, text: 'Ingredient Search', path: '/dashboard/user/ingredient-search' },
+    { icon: <CalendarMonthIcon />, text: 'Meal Planner', path: '/dashboard/user/meal-planner' },
     { icon: <SettingsIcon />, text: 'Settings', path: '/dashboard/user/settings' },
   ];
   

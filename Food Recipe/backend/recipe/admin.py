@@ -9,7 +9,9 @@ from .models import (
     Comment,
     Rating,
     FavoriteRecipe,
-    LikedRecipe
+    LikedRecipe,
+    MealPlan,
+    MealPlanEntry,
     
 )
 # Register your models here.
@@ -61,4 +63,13 @@ admin.site.register(LikedRecipe, LikedRecipeAdmin)
 admin.site.register(Ingredient, IngredientAdmin)
 admin.site.register(Step, StepAdmin)
 admin.site.register(Rating, RatingAdmin)
+
+class MealPlanAdmin(admin.ModelAdmin):
+    list_display = ["user", "start_date", "end_date"]
+
+class MealPlanEntryAdmin(admin.ModelAdmin):
+    list_display = ["meal_plan", "recipe", "date", "meal_type"]
+    
+admin.site.register(MealPlan, MealPlanAdmin)
+admin.site.register(MealPlanEntry, MealPlanEntryAdmin)
 admin.site.register(Comment, CommentAdmin)

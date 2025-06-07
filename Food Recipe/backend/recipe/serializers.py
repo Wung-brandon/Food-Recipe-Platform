@@ -2,7 +2,7 @@
 from rest_framework import serializers
 from .models import (
     Category, Tag, Recipe, Ingredient, Step, Tip,
-    Comment, Rating, FavoriteRecipe, LikedRecipe
+    Comment, Rating, FavoriteRecipe, LikedRecipe, MealPlan, MealPlanEntry
 )
 from django.contrib.auth import get_user_model
 import json
@@ -550,3 +550,31 @@ class LikedRecipeSerializer(serializers.ModelSerializer):
         model = LikedRecipe
         fields = ['id', 'recipe', 'liked_at']
         read_only_fields = ['user', 'liked_at']
+        
+class MealPlanEntrySerializer(serializers.ModelSerializer):
+    recipe = RecipeListSerializer(read_only=True)
+    recipe_id = serializers.PrimaryKeyRelatedField(
+        queryset=Recipe.objects.all(),
+        source='recipe',
+        write_only=True,
+        required=False
+    )
+
+    class Meta:
+        model = MealPlanEntry
+        fields = ['id', 'recipe', 'recipe_id', 'date', 'meal_type']
+        read_only_fields = ['id']
+
+class MealPlanSerializer(serializers.ModelSerializer):
+    user = serializers.PrimaryKeyRelatedField(read_only=True)
+    entries = MealPlanEntrySerializer(many=True, read_only=True)
+
+    class Meta:
+        model = MealPlan
+        fields = ['id', 'user', 'start_date', 'end_date', 'entries']
+        read_only_fields = ['id', 'entries'] # User is set automatically
+
+class ShoppingListSerializer(serializers.Serializer):
+    # Serializer to represent the shopping list output
+    ingredients = serializers.ListField(child=serializers.CharField())
+    # You could add more fields here if you want to group ingredients by recipe, category, etc.

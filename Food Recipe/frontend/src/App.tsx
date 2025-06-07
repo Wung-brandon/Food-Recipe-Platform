@@ -44,6 +44,10 @@ import ChefProfilePage from './pages/Dashboard/ChefDashboard/ChefProfile';
 import CreateRecipePage from './pages/Dashboard/ChefDashboard/ChefCreateRecipe';
 import FollowersPage from './pages/Dashboard/ChefDashboard/ChefFollowersPage';
 import AnalyticsPage from './pages/Dashboard/ChefDashboard/ChefAnalytics';
+
+import RecommendedRecipes from './pages/Recommendations';
+import IngredientSearch from './pages/IngredientSearch';
+import UserMealPlannerPage from './pages/MealPlannerPage';
 function App() {
     return (
       <>
@@ -78,17 +82,18 @@ function App() {
                 <Route path='/chat/:userId' element={<ChatPage />} />
                 <Route path='/user/:userId' element={<UserProfilePage />} />
               </Route>
-    
+              <Route path="/recommendations" element={<RecommendedRecipes currentRecipeId={1} />} />
+              <Route path="/ingredient-search" element={<IngredientSearch />} />
               {/* Dashboard Routes without Main Navbar and Footer */}
-              
+
               {/* Dashboard route */}
-                <Route path='/dashboard/chef' element={<ChefDashboard />}/>
-                <Route path='/dashboard/chef/recipe' element={<ChefRecipes />}/>
-                <Route path='/dashboard/chef/profile' element={<ChefProfilePage />} />
-                <Route path='/dashboard/chef/profile/:id' element={<ChefProfilePage />} />  
-                <Route path="/dashboard/chef/create-recipe" element={<CreateRecipePage />} />
-                <Route path='/dashboard/chef/followers' element={<FollowersPage />}/>
-                <Route path='/dashboard/chef/analytics' element={<AnalyticsPage />}/>
+              <Route path='/dashboard/chef' element={<ChefDashboard />}/>
+              <Route path='/dashboard/chef/recipe' element={<ChefRecipes />}/>
+              <Route path='/dashboard/chef/profile' element={<ChefProfilePage />} />
+              <Route path='/dashboard/chef/profile/:id' element={<ChefProfilePage />} />
+              <Route path="/dashboard/chef/create-recipe" element={<CreateRecipePage />} />
+              <Route path='/dashboard/chef/followers' element={<FollowersPage />}/>
+              <Route path='/dashboard/chef/analytics' element={<AnalyticsPage />}/>
 
                 <Route path="/dashboard/chef/edit-recipe/:slug" element={<CreateRecipePage />} />
 
@@ -103,6 +108,9 @@ function App() {
                 <Route path='/dashboard/user/recipes' element={<RecipesPage />} />
                 <Route path='/dashboard/user/profile' element={<UserProfileDashboardPage />} />
                 <Route path='/dashboard/user/my-favorites' element={<FavoriteRecipe />} />
+                <Route path="/dashboard/user/recommendations" element={<RecommendedRecipes />} />
+                <Route path="/dashboard/user/ingredient-search" element={<IngredientSearch />} />
+                <Route path="/dashboard/user/meal-planner" element={<UserMealPlannerPage />} />
                 <Route path='profile' element={<ProfilePage />} />
               
             </Routes>

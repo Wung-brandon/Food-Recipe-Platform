@@ -1,26 +1,35 @@
 from rest_framework import generics, permissions, status, filters
 from rest_framework.decorators import api_view, permission_classes
+from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError, PermissionDenied
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from django.db.models import Avg, Count, Q
+from django.db import transaction
 from django_filters.rest_framework import DjangoFilterBackend
 
 from .models import (
     Category, Tag, Recipe, Comment, Rating, Ingredient,
-    FavoriteRecipe, LikedRecipe
+    FavoriteRecipe, LikedRecipe, MealPlan, MealPlanEntry
 )
 from .serializers import (
     CategorySerializer, TagSerializer, 
     RecipeListSerializer, RecipeDetailSerializer, RecipeCreateUpdateSerializer,
     CommentSerializer, RatingSerializer, IngredientSerializer,
     FavoriteRecipeSerializer, LikedRecipeSerializer, ReviewSerializer,
-    CommentReplySerializer, ReviewListSerializer
+    CommentReplySerializer, ReviewListSerializer,
+    MealPlanSerializer, MealPlanEntrySerializer, ShoppingListSerializer
 )
 from .permissions import IsAuthorOrReadOnly, IsVerifiedChef
 from .filters import RecipeFilter
+from django.contrib.postgres.search import TrigramSimilarity
+from .utils import filter_recipes_by_preferences, select_recipes_for_meal_plan, aggregate_ingredients
+from datetime import date, timedelta
+import logging
+import traceback
 
+logger = logging.getLogger(__name__)
 
 class CategoryListCreateView(generics.ListCreateAPIView):
     queryset = Category.objects.all()
@@ -327,3 +336,295 @@ class SearchRecipesView(generics.ListAPIView):
         )
         
         return queryset
+
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def ingredient_based_search(request):
+    """
+    Search for recipes based on a list of ingredients.
+    """
+    ingredients_str = request.query_params.get('ingredients', '')
+    if not ingredients_str:
+        return Response({'detail': 'Please provide a comma-separated list of ingredients.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    ingredients_list = [ingredient.strip().lower() for ingredient in ingredients_str.split(',') if ingredient.strip()]
+
+    # Find recipes where at least one ingredient matches
+    # Using Q objects for partial matching on ingredient names
+    ingredient_q_objects = Q()
+    for ingredient in ingredients_list:
+        ingredient_q_objects |= Q(ingredients__name__icontains=ingredient)
+
+    # Filter recipes based on the ingredient matches
+    recipes = Recipe.objects.filter(ingredient_q_objects).distinct().annotate(
+        # You might want to consider a scoring mechanism here
+        # to prioritize recipes that use more of the provided ingredients.
+        # For simplicity, this example just returns all matching recipes.
+        # A more advanced approach could involve counting matched ingredients per recipe.
+        # Example (requires adjusting the model and potentially using a RawSQL or a more complex aggregation):
+        # matched_ingredient_count=Count('ingredients', filter=ingredient_q_objects)
+    ).annotate(
+        # Original annotations
+        # Consider adding logic to sort by the number of matched ingredients
+        # .order_by('-matched_ingredient_count')
+        average_rating=Avg('ratings__value'),
+        like_count=Count('likes', distinct=True)
+    )
+    serializer = RecipeListSerializer(recipes, many=True)
+    return Response(serializer.data)
+
+class MealPlanListCreateView(generics.ListCreateAPIView):
+    serializer_class = MealPlanSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return MealPlan.objects.filter(user=self.request.user).order_by('-created_at')
+
+    def create(self, request, *args, **kwargs):
+        """Override create method to provide detailed error handling"""
+        try:
+            user = request.user
+            preferences = request.data.get('preferences', {})
+            
+            # Log the incoming request data
+            logger.info(f"Meal plan creation request from user {user.id}")
+            logger.info(f"Request data: {request.data}")
+            logger.info(f"Preferences: {preferences}")
+
+            # Validate that we have preferences
+            if not preferences:
+                error_msg = "No preferences provided in the request"
+                logger.error(error_msg)
+                return Response(
+                    {'error': error_msg, 'detail': 'Preferences object is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Validate preference structure
+            required_fields = ['num_days', 'meal_types']
+            for field in required_fields:
+                if field not in preferences:
+                    error_msg = f"Missing required preference field: {field}"
+                    logger.error(error_msg)
+                    return Response(
+                        {'error': error_msg, 'detail': f'Field {field} is required in preferences'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            # Extract and validate preferences
+            try:
+                num_days = int(preferences.get('num_days', 7))
+                if num_days <= 0 or num_days > 30:
+                    raise ValueError("num_days must be between 1 and 30")
+            except (ValueError, TypeError) as e:
+                error_msg = f"Invalid num_days value: {preferences.get('num_days')}"
+                logger.error(f"{error_msg}. Error: {str(e)}")
+                return Response(
+                    {'error': error_msg, 'detail': 'num_days must be a valid integer between 1 and 30'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            meal_types = preferences.get('meal_types', [])
+            if not isinstance(meal_types, list) or not meal_types:
+                error_msg = "meal_types must be a non-empty list"
+                logger.error(error_msg)
+                return Response(
+                    {'error': error_msg, 'detail': 'meal_types must be an array with at least one meal type'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Validate meal types
+            valid_meal_types = ['Breakfast', 'Lunch', 'Dinner', 'Snack']
+            invalid_types = [mt for mt in meal_types if mt not in valid_meal_types]
+            if invalid_types:
+                error_msg = f"Invalid meal types: {invalid_types}"
+                logger.error(error_msg)
+                return Response(
+                    {'error': error_msg, 'detail': f'Valid meal types are: {valid_meal_types}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Use utility function to filter recipes based on preferences
+            try:
+                filtered_recipes = filter_recipes_by_preferences(preferences)
+                logger.info(f"Found {len(filtered_recipes)} recipes matching preferences")
+            except Exception as e:
+                error_msg = f"Error filtering recipes: {str(e)}"
+                logger.error(error_msg)
+                logger.error(traceback.format_exc())
+                return Response(
+                    {'error': error_msg, 'detail': 'Failed to filter recipes based on preferences'},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
+            if not filtered_recipes:
+                error_msg = "No recipes found matching your preferences"
+                logger.error(f"{error_msg}. Preferences: {preferences}")
+                return Response(
+                    {'error': error_msg, 'detail': 'Try adjusting your dietary preferences or cooking time limits'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            num_meals = num_days * len(meal_types)
+            logger.info(f"Planning {num_meals} meals for {num_days} days")
+
+            try:
+                selected_recipes = select_recipes_for_meal_plan(filtered_recipes, num_meals)
+                logger.info(f"Selected {len(selected_recipes)} recipes for meal plan")
+            except Exception as e:
+                error_msg = f"Error selecting recipes for meal plan: {str(e)}"
+                logger.error(error_msg)
+                logger.error(traceback.format_exc())
+                return Response(
+                    {'error': error_msg, 'detail': 'Failed to generate recipe selection'},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
+            # Create the meal plan with transaction to ensure atomicity
+            start_date = date.today()
+            end_date = start_date + timedelta(days=num_days - 1)
+
+            with transaction.atomic():
+                # Delete any existing meal plan for the user
+                deleted_count = MealPlan.objects.filter(user=user).count()
+                if deleted_count > 0:
+                    MealPlan.objects.filter(user=user).delete()
+                    logger.info(f"Deleted {deleted_count} existing meal plans for user {user.id}")
+
+                # Create new meal plan
+                meal_plan = MealPlan.objects.create(
+                    user=user,
+                    start_date=start_date,
+                    end_date=end_date
+                )
+                logger.info(f"Created meal plan {meal_plan.id} for user {user.id}")
+
+                # Create meal plan entries
+                current_date = start_date
+                recipe_index = 0
+                entries_created = 0
+
+                for day in range(num_days):
+                    for meal_type in meal_types:
+                        if recipe_index < len(selected_recipes):
+                            MealPlanEntry.objects.create(
+                                meal_plan=meal_plan,
+                                recipe=selected_recipes[recipe_index],
+                                date=current_date,
+                                meal_type=meal_type
+                            )
+                            recipe_index += 1
+                            entries_created += 1
+                        else:
+                            # Cycle back to beginning if we run out of recipes
+                            recipe_index = 0
+                            if selected_recipes:
+                                MealPlanEntry.objects.create(
+                                    meal_plan=meal_plan,
+                                    recipe=selected_recipes[recipe_index],
+                                    date=current_date,
+                                    meal_type=meal_type
+                                )
+                                recipe_index += 1
+                                entries_created += 1
+                    current_date += timedelta(days=1)
+
+                logger.info(f"Created {entries_created} meal plan entries")
+
+            # Serialize the response
+            serializer = self.get_serializer(meal_plan)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        except ValidationError as e:
+            logger.error(f"Validation error in meal plan creation: {str(e)}")
+            return Response(
+                {'error': 'Validation failed', 'detail': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"Unexpected error in meal plan creation: {str(e)}")
+            logger.error(traceback.format_exc())
+            return Response(
+                {'error': 'Internal server error', 'detail': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def perform_create(self, serializer):
+        # This method is no longer used since we override create()
+        pass
+
+class MealPlanDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = MealPlan.objects.all()
+    serializer_class = MealPlanSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        obj = super().get_object()
+        if obj.user != self.request.user:
+            raise PermissionDenied("You do not have permission to access this meal plan.")
+        return obj
+
+class UserMealPlanView(generics.RetrieveAPIView):
+    """Get the current user's active meal plan"""
+    serializer_class = MealPlanSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        user = self.request.user
+        # Get the user's most recent meal plan
+        meal_plan = MealPlan.objects.filter(user=user).order_by('-start_date').first()
+        if not meal_plan:
+            from rest_framework.exceptions import NotFound
+            raise NotFound("No meal plan found for this user.")
+        return meal_plan
+
+class MealPlanEntryListCreateView(generics.ListCreateAPIView):
+    serializer_class = MealPlanEntrySerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        meal_plan_pk = self.kwargs.get('meal_plan_pk')
+        return MealPlanEntry.objects.filter(meal_plan__pk=meal_plan_pk, meal_plan__user=self.request.user)
+
+    def perform_create(self, serializer):
+        meal_plan_pk = self.kwargs.get('meal_plan_pk')
+        meal_plan = get_object_or_404(MealPlan, pk=meal_plan_pk, user=self.request.user)
+        serializer.save(meal_plan=meal_plan)
+
+class MealPlanEntryDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = MealPlanEntry.objects.all()
+    serializer_class = MealPlanEntrySerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        obj = super().get_object()
+        if obj.meal_plan.user != self.request.user:
+            raise PermissionDenied("You do not have permission to access this meal plan entry.")
+        return obj
+
+    def perform_update(self, serializer):
+        if serializer.instance.meal_plan.user != self.request.user:
+            raise PermissionDenied("You do not have permission to update this meal plan entry.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if instance.meal_plan.user != self.request.user:
+            raise PermissionDenied("You do not have permission to delete this meal plan entry.")
+        instance.delete()
+
+class ShoppingListView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        meal_plan = get_object_or_404(MealPlan, pk=pk, user=request.user)
+        recipes_in_plan = [entry.recipe for entry in meal_plan.entries.all()]
+
+        if not recipes_in_plan:
+            return Response({'ingredients': []})
+
+        # Use utility function to aggregate ingredients
+        shopping_list = aggregate_ingredients(recipes_in_plan)
+
+        serializer = ShoppingListSerializer({'ingredients': shopping_list})
+        return Response(serializer.data)

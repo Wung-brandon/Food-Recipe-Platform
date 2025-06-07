@@ -45,7 +45,8 @@ INSTALLED_APPS = [
     "authentication.apps.AuthenticationConfig",
     "recipe.apps.RecipeConfig",
     "recommendations.apps.RecommendationsConfig",
-    
+    "analytics.apps.AnalyticsConfig",
+
     "rest_framework",
     "corsheaders",
     "django_filters",
