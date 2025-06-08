@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError, PermissionDenied
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
-from django.db.models import Avg, Count, Q
+from django.db.models import Avg, Count, Q, Prefetch
 from django.db import transaction
 from django_filters.rest_framework import DjangoFilterBackend
 
@@ -28,6 +28,7 @@ from .utils import filter_recipes_by_preferences, select_recipes_for_meal_plan, 
 from datetime import date, timedelta
 import logging
 import traceback
+from analytics.signals import track_recipe_view, track_recipe_share
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +85,96 @@ class RecipeReviewView(APIView):
         review = serializer.save()
         return Response(review, status=status.HTTP_201_CREATED)
         
+        
+class RecentReviewsView(generics.ListAPIView):
+    """
+    API endpoint to get recent 3 reviews for each recipe owned by the authenticated chef
+    """
+    serializer_class = ReviewListSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        # Get recipes owned by the authenticated user (chef)
+        chef_recipes = Recipe.objects.filter(
+            chef=self.request.user
+        ).prefetch_related(
+            Prefetch(
+                'comments',
+                queryset=Comment.objects.filter(
+                    text__isnull=False,
+                    text__gt=''
+                ).select_related('user').order_by('-created_at')[:3],
+                to_attr='recent_comments'
+            )
+        )
+        
+        # Collect all recent comments from all recipes
+        recent_comments = []
+        for recipe in chef_recipes:
+            for comment in recipe.recent_comments:
+                recent_comments.append(comment)
+        
+        # Sort all comments by creation date and return the most recent ones
+        recent_comments.sort(key=lambda x: x.created_at, reverse=True)
+        
+        # Return the most recent 3 comments overall
+        return recent_comments[:3]
+    
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        
+        # Add recipe title to each comment
+        data = []
+        for item in serializer.data:
+            comment_obj = Comment.objects.get(id=item['id'])
+            item['recipe_title'] = comment_obj.recipe.title
+            data.append(item)
+        
+        return Response({
+            'success': True,
+            'data': data,
+            'count': len(data)
+        })
+
+# Alternative approach - if you want to get recent reviews grouped by recipe
+class RecentReviewsByRecipeView(generics.ListAPIView):
+    """
+    API endpoint to get recent 3 reviews for each recipe, grouped by recipe
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def list(self, request, *args, **kwargs):
+        # Get recipes owned by the authenticated user (chef)
+        chef_recipes = Recipe.objects.filter(
+            chef=request.user
+        ).prefetch_related(
+            Prefetch(
+                'comments',
+                queryset=Comment.objects.filter(
+                    text__isnull=False,
+                    text__gt=''
+                ).select_related('user').order_by('-created_at')[:3],
+                to_attr='recent_comments'
+            )
+        )
+        
+        data = []
+        for recipe in chef_recipes:
+            if recipe.recent_comments:  # Only include recipes with comments
+                recipe_data = {
+                    'recipe_id': recipe.id,
+                    'recipe_title': recipe.title,
+                    'recent_reviews': ReviewListSerializer(recipe.recent_comments, many=True).data
+                }
+                data.append(recipe_data)
+        
+        return Response({
+            'success': True,
+            'data': data,
+            'count': len(data)
+        })
+
 class CommentReplyView(APIView):
     permission_classes = [permissions.AllowAny]
     
@@ -206,6 +297,20 @@ class RecipeDetailView(generics.RetrieveUpdateDestroyAPIView):
             like_count=Count('likes', distinct=True)
         )
 
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        # Track the view
+        track_recipe_view(
+            recipe=instance,
+            user=request.user if request.user.is_authenticated else None,
+            ip_address=request.META.get('REMOTE_ADDR'),
+            user_agent=request.META.get('HTTP_USER_AGENT'),
+            referrer=request.META.get('HTTP_REFERER'),
+            session_key=request.session.session_key if hasattr(request, 'session') else None,
+            time_spent=0  # You can update this if you track time spent
+        )
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
 # Add this new view to create recipe drafts that will be ready for publishing once verified
 class RecipeDraftCreateView(generics.CreateAPIView):

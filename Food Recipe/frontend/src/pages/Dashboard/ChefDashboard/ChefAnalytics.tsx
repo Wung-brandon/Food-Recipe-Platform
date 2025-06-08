@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import DashboardLayout from '../../../Layout/DashboardLayout';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { useAuth } from '../../../context/AuthContext';
+import { Link } from 'react-router-dom';
 
 type RecipePerformance = {
   name: string;
@@ -13,117 +15,234 @@ type RecipePerformance = {
 type AnalyticsData = {
   viewsData: { name: string; views: number; uniqueVisitors: number }[];
   recipesPerformance: RecipePerformance[];
-  followers: { count: number; growth: number };
-  engagement: { likes: number; comments: number; shares: number; saves: number };
+  followers: { count: number; growth: number; growthPercentage?: number };
+  engagement: { 
+    likes: number; 
+    comments: number; 
+    shares: number; 
+    saves: number;
+    likesPercentage?: number;
+    commentsPercentage?: number;
+    sharesPercentage?: number;
+    savesPercentage?: number;
+  };
   topRecipes: RecipePerformance[];
   categoryDistribution: { name: string; value: number }[];
 };
 
+
+ 
+const API_BASE_URL = 'http://localhost:8000';
+
 const AnalyticsPage = () => {
   const [selectedRange, setSelectedRange] = useState('30days');
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData>({
     viewsData: [],
     recipesPerformance: [],
-    followers: { count: 0, growth: 0 },
-    engagement: { likes: 0, comments: 0, shares: 0, saves: 0 },
+    followers: { count: 0, growth: 0, growthPercentage: 0 },
+    engagement: { 
+      likes: 0, 
+      comments: 0, 
+      shares: 0, 
+      saves: 0,
+      likesPercentage: 0,
+      commentsPercentage: 0,
+      sharesPercentage: 0,
+      savesPercentage: 0
+    },
     topRecipes: [],
     categoryDistribution: []
   });
-  
-  // Simulated data fetch
-  useEffect(() => {
-    // Simulating API call delay
-    setTimeout(() => {
-      const generateData = () => {
-        let multiplier = 1;
-        
-        switch(selectedRange) {
-          case '7days':
-            multiplier = 0.25;
-            break;
-          case '90days':
-            multiplier = 3;
-            break;
-          case '12months':
-            multiplier = 12;
-            break;
-          default: // 30days
-            multiplier = 1;
-        }
-        
-        // Views data - based on selected range
-        const viewsData = [];
-        const dataPoints = selectedRange === '12months' ? 12 : 
-                          selectedRange === '90days' ? 13 : 
-                          selectedRange === '7days' ? 7 : 30;
-        
-        for (let i = 0; i < dataPoints; i++) {
-          const baseValue = Math.floor(Math.random() * 50) + 150;
-          viewsData.push({
-            name: selectedRange === '12months' ? `Month ${i+1}` : `Day ${i+1}`,
-            views: Math.floor(baseValue * multiplier),
-            uniqueVisitors: Math.floor((baseValue * 0.7) * multiplier)
-          });
-        }
-        
-        // Recipes performance data
-        const recipes = [
-          'Chocolate Cake', 'Spaghetti Carbonara', 'Chicken Curry', 
-          'Vegetable Stir-Fry', 'Banana Bread'
-        ];
-        
-        const recipesPerformance = recipes.map(recipe => ({
-          name: recipe,
-          views: Math.floor((Math.random() * 500 + 100) * multiplier),
-          likes: Math.floor((Math.random() * 100 + 10) * multiplier),
-          comments: Math.floor((Math.random() * 30 + 5) * multiplier)
-        }));
-        
-        // Followers data
-        const followerCount = Math.floor(428 * multiplier);
-        const followerGrowth = Math.floor(42 * multiplier);
-        
-        // Engagement data
-        const engagement = {
-          likes: Math.floor(856 * multiplier),
-          comments: Math.floor(124 * multiplier),
-          shares: Math.floor(76 * multiplier),
-          saves: Math.floor(210 * multiplier)
-        };
-        
-        // Top recipes 
-        const topRecipes = recipesPerformance
-          .sort((a, b) => b.views - a.views)
-          .slice(0, 3)
-          .map(recipe => ({
-            ...recipe,
-            conversionRate: ((recipe.likes / recipe.views) * 100).toFixed(1)
-          }));
-        
-        // Category distribution
-        const categoryDistribution = [
-          { name: 'Desserts', value: Math.floor(35 * multiplier) },
-          { name: 'Main Dish', value: Math.floor(25 * multiplier) },
-          { name: 'Appetizers', value: Math.floor(15 * multiplier) },
-          { name: 'Beverages', value: Math.floor(10 * multiplier) },
-          { name: 'Breakfast', value: Math.floor(15 * multiplier) }
-        ];
-        
-        return {
-          viewsData,
-          recipesPerformance,
-          followers: { count: followerCount, growth: followerGrowth },
-          engagement,
-          topRecipes,
-          categoryDistribution
-        };
-      };
+  const { token } = useAuth();
+
+  // Enhanced API service functions
+  const apiService = {
+    // Get analytics data with better error handling
+    getAnalytics: async (range: string) => {
+      if (!token) {
+        throw new Error('No authentication token available');
+      }
+
+      console.log('Making analytics request with token:', token);
+
+      const response = await fetch(`${API_BASE_URL}/api/analytics/recipe-analytics/?range=${range}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`, // Fixed: Changed from Bearer to Token
+          'Content-Type': 'application/json',
+        },
+      });
       
-      setAnalyticsData(generateData());
+      console.log('Response status:', response.status);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        
+        if (response.status === 401) {
+          throw new Error('Authentication failed. Please log in again.');
+        } else if (response.status === 403) {
+          throw new Error('You do not have permission to view analytics.');
+        } else if (response.status >= 500) {
+          throw new Error('Server error. Please try again later.');
+        }
+        throw new Error(`Failed to fetch analytics data: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Analytics data received:', data);
+      return data;
+    },
+
+    // Track recipe view with better error handling
+    trackView: async (recipeId: string, timeSpent: number = 0) => {
+      const response = await fetch(`${API_BASE_URL}/api/analytics/track-view/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '', // Fixed: Changed from Bearer to Token
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          recipe_id: recipeId,
+          time_spent: timeSpent,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to track view');
+      }
+      
+      return response.json();
+    },
+
+    // Handle engagement actions with better error handling
+    handleEngagement: async (action: string, recipeId: string, additionalData?: any) => {
+      if (!token) {
+        throw new Error('Authentication required for engagement actions');
+      }
+
+      const requestBody: any = {
+        action,
+        recipe_id: recipeId,
+      };
+
+      if (action === 'comment' && additionalData?.comment) {
+        requestBody.comment = additionalData.comment;
+      }
+      if (action === 'share' && additionalData?.platform) {
+        requestBody.platform = additionalData.platform;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/analytics/engagement/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`, // Fixed: Changed from Bearer to Token
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error('Authentication failed');
+        }
+        throw new Error(`Failed to ${action}`);
+      }
+      
+      return response.json();
+    },
+
+    // Download analytics report
+    downloadReport: async (range: string) => {
+      if (!token) {
+        throw new Error('Authentication required');
+      }
+
+      try {
+        const data = await apiService.getAnalytics(range);
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `analytics-report-${range}-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } catch (error) {
+        throw new Error('Failed to download report');
+      }
+    }
+  };
+
+  // Fetch analytics data from backend
+  useEffect(() => {
+    const fetchAnalyticsData = async () => {
+      setIsLoading(true);
+      setError(null);
+      
+      try {
+        console.log('Fetching analytics data with token:', token);
+        const data = await apiService.getAnalytics(selectedRange);
+        
+        // Process the data to match frontend structure
+        const processedData: AnalyticsData = {
+          viewsData: data.viewsData || [],
+          recipesPerformance: data.recipesPerformance || [],
+          followers: {
+            count: data.followers?.count || 0,
+            growth: data.followers?.growth || 0,
+            growthPercentage: data.followers?.growthPercentage || 0
+          },
+          engagement: {
+            likes: data.engagement?.likes || 0,
+            comments: data.engagement?.comments || 0,
+            shares: data.engagement?.shares || 0,
+            saves: data.engagement?.saves || 0,
+            likesPercentage: data.engagement?.likesPercentage || 0,
+            commentsPercentage: data.engagement?.commentsPercentage || 0,
+            sharesPercentage: data.engagement?.sharesPercentage || 0,
+            savesPercentage: data.engagement?.savesPercentage || 0
+          },
+          topRecipes: data.topRecipes || [],
+          categoryDistribution: data.categoryDistribution || []
+        };
+        
+        console.log('Processed analytics data:', processedData);
+        setAnalyticsData(processedData);
+      } catch (err) {
+        console.error('Error fetching analytics data:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load analytics data. Please try again.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (token) {
+      fetchAnalyticsData();
+    } else {
+      setError('Please log in to view analytics');
       setIsLoading(false);
-    }, 1000);
-  }, [selectedRange]);
+    }
+  }, [selectedRange, token]);
+
+  // Helper function to format percentage change
+  const formatPercentageChange = (percentage: number): string => {
+    if (percentage > 0) return `+${percentage}%`;
+    if (percentage < 0) return `${percentage}%`;
+    return '0%';
+  };
+
+  // Helper function to get percentage color class
+  const getPercentageColorClass = (percentage: number): string => {
+    if (percentage > 0) return 'text-green-500';
+    if (percentage < 0) return 'text-red-500';
+    return 'text-gray-500';
+  };
   
   // Custom colors for charts
   const COLORS = ['#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899'];
@@ -139,7 +258,7 @@ const AnalyticsPage = () => {
           <p className="text-sm font-medium text-gray-500">{title}</p>
           <div className="flex items-end mt-1">
             <p className="text-2xl font-semibold text-gray-900">{value}</p>
-            {subValue && (
+            {subValue !== undefined && (
               <p className={`ml-2 mb-1 text-sm font-medium ${subValue > 0 ? 'text-green-500' : 'text-red-500'}`}>
                 {subValue > 0 ? '+' : ''}{subValue}% {subText}
               </p>
@@ -149,6 +268,29 @@ const AnalyticsPage = () => {
       </div>
     </div>
   );
+
+  // Error state
+  // if (error) {
+  //   return (
+  //     <DashboardLayout title="Analytics">
+  //       <div className="flex flex-col items-center justify-center py-20">
+  //         <div className="text-red-500 mb-4">
+  //           <svg className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+  //             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+  //           </svg>
+  //         </div>
+  //         <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Analytics</h3>
+  //         <p className="text-gray-500 mb-4">{error}</p>
+  //         <button
+  //           onClick={() => window.location.reload()}
+  //           className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-amber-600 hover:bg-amber-700"
+  //         >
+  //           Retry
+  //         </button>
+  //       </div>
+  //     </DashboardLayout>
+  //   );
+  // }
 
   return (
     <DashboardLayout title="Analytics">
@@ -166,6 +308,7 @@ const AnalyticsPage = () => {
               value={selectedRange}
               onChange={(e) => setSelectedRange(e.target.value)}
               className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-amber-500 focus:border-amber-500 sm:text-sm rounded-md"
+              disabled={isLoading}
             >
               <option value="7days">Last 7 Days</option>
               <option value="30days">Last 30 Days</option>
@@ -186,7 +329,7 @@ const AnalyticsPage = () => {
               <MetricCard
                 title="Total Views"
                 value={analyticsData.viewsData.reduce((sum, item) => sum + item.views, 0).toLocaleString()}
-                subValue={12}
+                subValue={12} // You can calculate this from previous period data
                 subText="vs previous period"
                 icon={
                   <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -211,7 +354,7 @@ const AnalyticsPage = () => {
               <MetricCard
                 title="Recipe Likes"
                 value={analyticsData.engagement.likes.toLocaleString()}
-                subValue={8}
+                subValue={8} // You can calculate this from previous period data
                 subText="vs previous period"
                 icon={
                   <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -223,7 +366,7 @@ const AnalyticsPage = () => {
               <MetricCard
                 title="Recipe Comments"
                 value={analyticsData.engagement.comments.toLocaleString()}
-                subValue={-3}
+                subValue={-3} // You can calculate this from previous period data
                 subText="vs previous period"
                 icon={
                   <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -238,126 +381,150 @@ const AnalyticsPage = () => {
               {/* Views Chart */}
               <div className="bg-white rounded-lg shadow p-6">
                 <h2 className="text-lg font-medium text-gray-900">Views Over Time</h2>
-                <div className="mt-2 h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart
-                      data={analyticsData.viewsData}
-                      margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis />
-                      <Tooltip />
-                      <Legend />
-                      <Line type="monotone" dataKey="views" stroke="#F59E0B" activeDot={{ r: 8 }} />
-                      <Line type="monotone" dataKey="uniqueVisitors" stroke="#10B981" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
+                {analyticsData.viewsData.length > 0 ? (
+                  <div className="mt-2 h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart
+                        data={analyticsData.viewsData}
+                        margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Line type="monotone" dataKey="views" stroke="#F59E0B" activeDot={{ r: 8 }} />
+                        <Line type="monotone" dataKey="uniqueVisitors" stroke="#10B981" />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <div className="mt-2 h-80 flex items-center justify-center text-gray-500">
+                    No views data available for this period
+                  </div>
+                )}
               </div>
               
               {/* Recipe Performance Chart */}
               <div className="bg-white rounded-lg shadow p-6">
                 <h2 className="text-lg font-medium text-gray-900">Recipe Performance</h2>
-                <div className="mt-2 h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={analyticsData.recipesPerformance}
-                      margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis />
-                      <Tooltip />
-                      <Legend />
-                      <Bar dataKey="views" fill="#F59E0B" />
-                      <Bar dataKey="likes" fill="#10B981" />
-                      <Bar dataKey="comments" fill="#3B82F6" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+                {analyticsData.recipesPerformance.length > 0 ? (
+                  <div className="mt-2 h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={analyticsData.recipesPerformance}
+                        margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="views" fill="#F59E0B" />
+                        <Bar dataKey="likes" fill="#10B981" />
+                        <Bar dataKey="comments" fill="#3B82F6" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <div className="mt-2 h-80 flex items-center justify-center text-gray-500">
+                    No recipe performance data available
+                  </div>
+                )}
               </div>
               
               {/* Category Distribution Chart */}
               <div className="bg-white rounded-lg shadow p-6">
                 <h2 className="text-lg font-medium text-gray-900">Recipe Categories</h2>
-                <div className="mt-2 h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={analyticsData.categoryDistribution}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                      >
-                        {analyticsData.categoryDistribution.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                      <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
+                {analyticsData.categoryDistribution.length > 0 ? (
+                  <div className="mt-2 h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={analyticsData.categoryDistribution}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                        >
+                          {analyticsData.categoryDistribution.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <div className="mt-2 h-80 flex items-center justify-center text-gray-500">
+                    No category distribution data available
+                  </div>
+                )}
               </div>
               
               {/* Top Recipes */}
               <div className="bg-white rounded-lg shadow p-6">
                 <h2 className="text-lg font-medium text-gray-900">Top Performing Recipes</h2>
-                <div className="mt-6 overflow-hidden">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Recipe
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Views
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Likes
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Conv. Rate
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {analyticsData.topRecipes.map((recipe, index) => (
-                        <tr key={index}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {recipe.name}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {recipe.views.toLocaleString()}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {recipe.likes.toLocaleString()}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                              parseFloat(recipe.conversionRate ?? '') > 15 
-                                ? 'bg-green-100 text-green-800' 
-                                : parseFloat(recipe.conversionRate ?? '') > 10
-                                ? 'bg-amber-100 text-amber-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}>
-                              {recipe.conversionRate}%
-                            </span>
-                          </td>
+                {analyticsData.topRecipes.length > 0 ? (
+                  <div className="mt-6 overflow-hidden">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Recipe
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Views
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Likes
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Conv. Rate
+                          </th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {analyticsData.topRecipes.map((recipe, index) => (
+                          <tr key={index}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                              {recipe.name}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {recipe.views.toLocaleString()}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {recipe.likes.toLocaleString()}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                parseFloat(recipe.conversionRate ?? '0') > 15 
+                                  ? 'bg-green-100 text-green-800' 
+                                  : parseFloat(recipe.conversionRate ?? '0') > 10
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-red-100 text-red-800'
+                              }`}>
+                                {recipe.conversionRate}%
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="mt-6 text-center text-gray-500">
+                    No top recipes data available
+                  </div>
+                )}
                 <div className="mt-6">
-                  <a href="#" className="text-sm font-medium text-amber-600 hover:text-amber-500">
+                  <Link to="/dashboard/chef/recipe" className="text-sm font-medium text-amber-600 hover:text-amber-500">
                     View all recipes →
-                  </a>
+                  </Link>
                 </div>
               </div>
             </div>
@@ -428,9 +595,9 @@ const AnalyticsPage = () => {
                   <h3 className="text-lg font-medium text-amber-800">Insights for Growth</h3>
                   <div className="mt-2 text-sm text-amber-700">
                     <ul className="list-disc pl-5 space-y-1">
-                      <li>Your dessert recipes perform 23% better than other categories. Consider creating more content in this area.</li>
-                      <li>Recipes posted on weekends get 18% more engagement. Try scheduling your best content for Saturday mornings.</li>
-                      <li>Users who comment are 5x more likely to follow you. Encourage more comments by asking questions in your recipes.</li>
+                      <li>Your top recipe has a {analyticsData.topRecipes[0]?.conversionRate}% conversion rate - great engagement!</li>
+                      <li>You have {analyticsData.followers.growth} new followers this period. Keep up the consistent posting!</li>
+                      <li>Total engagement across all recipes shows strong community interest in your content.</li>
                     </ul>
                   </div>
                 </div>
@@ -439,13 +606,25 @@ const AnalyticsPage = () => {
             
             {/* Action buttons */}
             <div className="flex flex-col sm:flex-row gap-4 justify-end">
-              <button className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500">
+              <button 
+                className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500"
+                onClick={() => {
+                  // Implement download functionality
+                  console.log('Download report clicked');
+                }}
+              >
                 <svg className="-ml-1 mr-2 h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
                 Download Report
               </button>
-              <button className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500">
+              <button 
+                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500"
+                onClick={() => {
+                  // Implement personalized tips functionality
+                  console.log('Get personalized tips clicked');
+                }}
+              >
                 <svg className="-ml-1 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -459,4 +638,6 @@ const AnalyticsPage = () => {
   );
 };
 
+// Export the API service for use in other components
+// export { apiService };
 export default AnalyticsPage;

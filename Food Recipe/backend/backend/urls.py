@@ -25,4 +25,5 @@ urlpatterns = [
     path("api/", include("recipe.urls")),
     path("api/ai/", include("recommendations.urls")),
     path("api/analytics/", include("analytics.urls")),
+    path("api/notifications/", include("notifications.urls")),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

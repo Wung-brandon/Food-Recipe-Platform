@@ -35,6 +35,8 @@ urlpatterns = [
     path('recipes/<slug:recipe_slug>/comments/', views.CommentListCreateView.as_view(), name='comment-list'),
     path('recipes/<slug:recipe_slug>/comments/<int:pk>/', views.CommentDetailView.as_view(), name='comment-detail'),
     
+    path('recipes/recent-reviews/', views.RecentReviewsView.as_view(), name='recent-reviews'),
+    path('recipes/recent-reviews-by-recipe/', views.RecentReviewsByRecipeView.as_view(), name='recent-reviews-by-recipe'),
     # Rating endpoint
     path('recipes/<slug:recipe_slug>/rate/', views.RateRecipeView.as_view(), name='rate-recipe'),
     

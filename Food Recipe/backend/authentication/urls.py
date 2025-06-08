@@ -9,6 +9,7 @@ urlpatterns = [
     
     # User registration and profile
     path('signup/', views.SignUpView.as_view(), name='signup'),
+    path('users/', views.ListAllUsersView.as_view(), name='user-list'),
     path('chef/signup/', views.ChefSignUpView.as_view(), name='chef-signup'),
     path('user/profile/', views.ListCreateUserProfileView.as_view(), name='user-profile'),
     path('user/profile/<int:id>/', views.RetrieveUpdateUserProfileView.as_view(), name='user-profile-detail'),

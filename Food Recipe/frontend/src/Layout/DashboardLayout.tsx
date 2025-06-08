@@ -1,63 +1,50 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation, useNavigate, useParams, Navigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-
+import axios from 'axios';
+import { Notification } from '../types/Notification';
 // Import icons
 import {
   Dashboard as DashboardIcon,
   AddCircle as AddCircleIcon,
   MenuBook as MenuBookIcon,
   People as PeopleIcon,
-  Drafts as DraftsIcon,
   Analytics as AnalyticsIcon,
   Person as PersonIcon,
   Settings as SettingsIcon
 } from '@mui/icons-material';
 
-// Dashboard Layout with built-in navigation items
-// Define User and ChefProfile interfaces to match expected user shape
-interface ChefProfile {
-  id: string | number;
-  // add other properties as needed
-}
-
-interface User {
-  username?: string;
-  email?: string;
-  chef_profile?: ChefProfile;
-  // add other properties as needed
-}
-
+const API_BASE_URL = 'http://localhost:8000';
 const DashboardLayout = ({ children, title }) => {
   const location = useLocation();
   const navigate = useNavigate();
   
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  
-  // Define notification interface
-  interface Notification {
-    id: number;
-    type: 'comment' | 'like' | 'follow';
-    message: string;
-    time: string;
-    read: boolean;
-  }
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-  const { user, isLoading, isAuthenticated, logout } = useAuth();
-  const { id } = useParams();
+  const { user, isLoading, isAuthenticated, logout, token } = useAuth(); // Get getToken
+  // const { id } = useParams();
   
   // Fetch notifications on mount
   useEffect(() => {
-    // Simulated notifications fetch
-    const demoNotifications: Notification[] = [
-      { id: 1, type: 'comment', message: 'New comment on your recipe', time: '5 min ago', read: false },
-      { id: 2, type: 'like', message: 'Someone liked your recipe', time: '2 hours ago', read: false },
-      { id: 3, type: 'follow', message: 'New follower', time: '1 day ago', read: true }
-    ];
-    setNotifications(demoNotifications);
+    const fetchNotifications = async () => {
+      if (!token) {
+        console.error("No token found for fetching notifications");
+        return;
+      }
+      try {
+        const response = await axios.get<Notification[]>(`${API_BASE_URL}/notifications/`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        console.log("Fetched notifications:", response.data);
+        setNotifications(response.data);
+      } catch (error) {
+        console.error("Error fetching notifications:", error);
+      }
+    };
+    fetchNotifications();
   }, []);
 
   // Show loading while auth is initializing
@@ -94,7 +81,7 @@ const DashboardLayout = ({ children, title }) => {
     { icon: <SettingsIcon />, text: 'Settings', path: '/dashboard/chef/settings' },
   ];
   
-  const unreadNotificationsCount = notifications.filter(n => !n.read).length;
+  const unreadNotificationsCount = notifications.filter(n => !n.is_read).length;
   
   const handleLogout = () => {
     logout();
@@ -181,30 +168,35 @@ const DashboardLayout = ({ children, title }) => {
                       {notifications.length > 0 ? (
                         <div className="divide-y divide-gray-100">
                           {notifications.map(notification => (
-                            <div 
+                            <Link // Use Link to navigate to notification details if needed, or just div
                               key={notification.id}
-                              className={`px-4 py-3 hover:bg-gray-50 transition-colors duration-100 ${!notification.read ? 'bg-amber-50' : ''}`}
+                              to="#" // Replace with actual notification detail link if applicable
+                              className={`block px-4 py-3 hover:bg-gray-50 transition-colors duration-100 ${!notification.is_read ? 'bg-amber-50' : ''}`}
                             >
                               <div className="flex items-start">
                                 <div className="flex-shrink-0 mt-0.5">
-                                  {notification.type === 'comment' ? (
+                                  {notification.notification_type === 'comment' ? (
                                     <div className="bg-blue-500 rounded-full p-2">
                                       <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
                                       </svg>
                                     </div>
-                                  ) : notification.type === 'like' ? (
+                                  ) : notification.notification_type === 'like' ? (
                                     <div className="bg-red-500 rounded-full p-2">
                                       <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                                       </svg>
                                     </div>
-                                  ) : (
+                                  ) : notification.notification_type === 'follow' ? (
                                     <div className="bg-green-500 rounded-full p-2">
                                       <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                                       </svg>
                                     </div>
+                                  ) : ( // Default icon for other types or if type is missing
+                                     <div className="bg-gray-500 rounded-full p-2">
+                                        <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+                                      </div>
                                   )}
                                 </div>
                                 <div className="ml-3 w-0 flex-1">
@@ -212,11 +204,11 @@ const DashboardLayout = ({ children, title }) => {
                                     {notification.message}
                                   </p>
                                   <p className="mt-1 text-xs text-gray-500">
-                                    {notification.time}
+                                    {new Date(notification.timestamp).toLocaleString()} {/* Format timestamp */}
                                   </p>
                                 </div>
                               </div>
-                            </div>
+                            </Link>
                           ))}
                         </div>
                       ) : (
@@ -226,7 +218,7 @@ const DashboardLayout = ({ children, title }) => {
                       )}
                     </div>
                     <div className="py-1 border-t border-gray-100">
-                      <Link to="/notifications" className="block px-4 py-2 text-sm text-center text-amber-600 hover:text-amber-900" onClick={closeAllMenus}>
+                      <Link to="/dashboard/chef/notifications" className="block px-4 py-2 text-sm text-center text-amber-600 hover:text-amber-900" onClick={closeAllMenus}>
                         View all notifications
                       </Link>
                     </div>

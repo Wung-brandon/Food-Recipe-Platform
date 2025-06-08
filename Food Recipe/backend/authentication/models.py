@@ -108,8 +108,8 @@ class ChefProfile(models.Model):
         return f"{self.user.email}'s Chef Profile"
 
 class UserFollowing(models.Model):
-    user = models.ForeignKey(CustomUser, related_name='following', on_delete=models.CASCADE)
-    target_user = models.ForeignKey(CustomUser, related_name='followers', on_delete=models.CASCADE)
+    user = models.ForeignKey(CustomUser, related_name='following_auth', on_delete=models.CASCADE)
+    target_user = models.ForeignKey(CustomUser, related_name='followers_auth', on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

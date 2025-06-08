@@ -48,6 +48,7 @@ import AnalyticsPage from './pages/Dashboard/ChefDashboard/ChefAnalytics';
 import RecommendedRecipes from './pages/Recommendations';
 import IngredientSearch from './pages/IngredientSearch';
 import UserMealPlannerPage from './pages/MealPlannerPage';
+import AllNotificationsPage from './pages/AllNotifications';
 function App() {
     return (
       <>
@@ -94,7 +95,7 @@ function App() {
               <Route path="/dashboard/chef/create-recipe" element={<CreateRecipePage />} />
               <Route path='/dashboard/chef/followers' element={<FollowersPage />}/>
               <Route path='/dashboard/chef/analytics' element={<AnalyticsPage />}/>
-
+                <Route path="/dashboard/chef/notifications" element={<AllNotificationsPage />} />
                 <Route path="/dashboard/chef/edit-recipe/:slug" element={<CreateRecipePage />} />
 
 

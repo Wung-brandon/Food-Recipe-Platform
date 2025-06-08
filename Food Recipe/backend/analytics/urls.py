@@ -1,10 +1,10 @@
 from django.urls import path
 from . import views
 
+# app_name = 'analytics'
 
 urlpatterns = [
-    # path("analytics/", views.AnalyticsView.as_view(), name="analytics"),
-    # path("analytics/recipes/", views.RecipeAnalyticsView.as_view(), name="recipe-analytics"),
-    # path("analytics/users/", views.UserAnalyticsView.as_view(), name="user-analytics"),
-    # path("analytics/ingredients/", views.IngredientAnalyticsView.as_view(), name="ingredient-analytics"),
+    path('recipe-analytics/', views.RecipeAnalyticsView.as_view(), name='recipe-analytics'),
+    path('track-view/', views.RecipeViewTrackingView.as_view(), name='track-view'),
+    path('engagement/', views.RecipeEngagementView.as_view(), name='engagement'),
 ]

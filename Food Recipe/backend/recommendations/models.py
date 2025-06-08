@@ -5,12 +5,12 @@ from recipe.models import Recipe
 User = settings.AUTH_USER_MODEL
 
 class RecipeView(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='recommendation_recipe_views')
+    recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name='recommendation_views')
     viewed_at = models.DateTimeField(auto_now_add=True)
 
 class UserPreference(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='recommendation_preference')
     dietary_needs = models.CharField(max_length=255, blank=True, null=True)
     cuisine_preferences = models.CharField(max_length=255, blank=True, null=True)
     # Add more preference fields as needed
