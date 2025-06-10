@@ -59,12 +59,9 @@ class IsVerifiedChef(BasePermission):
                 request.user.role == 'CHEF' and 
                 hasattr(request.user, 'chef_profile') and 
                 request.user.chef_profile.verification_status == 'VERIFIED')
-
 class MyTokenObtainPairView(TokenObtainPairView):
     serializer_class = MyTokenObtainPairSerializer
     permission_classes = [AllowAny]
-# views.py modification - Modify the SignUpView class
-
 class SignUpView(GenericAPIView):
     serializer_class = SignUpSerializer
     permission_classes = [AllowAny]
@@ -76,14 +73,13 @@ class SignUpView(GenericAPIView):
             user = serializer.save()
 
             try:
-                pass  # Add your code here
+                pass  
             except Exception as e:
                 logger.error(f"An error occurred: {e}")
                 # For regular users, set is_verified to True automatically
                 if user.role == 'USER':
                     user.is_verified = True
                     user.save()
-                    
                     # Send welcome email instead of verification
                     try:
                         context = {

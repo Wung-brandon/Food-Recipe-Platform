@@ -28,7 +28,12 @@ from .utils import filter_recipes_by_preferences, select_recipes_for_meal_plan, 
 from datetime import date, timedelta
 import logging
 import traceback
-from analytics.signals import track_recipe_view, track_recipe_share
+from analytics.signals import (
+                track_recipe_view, 
+                track_recipe_share, 
+                track_recipe_comment_manual, 
+                track_recipe_like_manual, 
+                track_recipe_save_manual)
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +88,18 @@ class RecipeReviewView(APIView):
         serializer = ReviewSerializer(data=request.data, context={'request': request, 'recipe': recipe})
         serializer.is_valid(raise_exception=True)
         review = serializer.save()
+        # Track the comment action
+        # Ensure session exists for unauthenticated users
+        if not request.user.is_authenticated:
+            if not request.session.session_key:
+                request.session.create()
+        
+        track_recipe_comment_manual(
+            recipe=recipe,
+            user=request.user if request.user.is_authenticated else None,
+            ip_address=request.META.get('REMOTE_ADDR'),
+            session_key=request.session.session_key
+        )
         return Response(review, status=status.HTTP_201_CREATED)
         
         
@@ -193,6 +210,18 @@ class CommentReplyView(APIView):
         
         if serializer.is_valid():
             reply = serializer.save()
+            # Track the comment action for replies
+            # Ensure session exists for unauthenticated users
+            if not request.user.is_authenticated:
+                if not request.session.session_key:
+                    request.session.create()
+            
+            track_recipe_comment_manual(
+                recipe=recipe,
+                user=request.user if request.user.is_authenticated else None,
+                ip_address=request.META.get('REMOTE_ADDR'),
+                session_key=request.session.session_key
+            )
             return Response({
                 'detail': 'Reply submitted successfully.',
                 'reply': CommentReplySerializer(reply).data
@@ -299,6 +328,11 @@ class RecipeDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
+        # Ensure session exists for unauthenticated users
+        if not request.user.is_authenticated:
+            if not request.session.session_key:
+                request.session.create()
+        
         # Track the view
         track_recipe_view(
             recipe=instance,
@@ -306,8 +340,8 @@ class RecipeDetailView(generics.RetrieveUpdateDestroyAPIView):
             ip_address=request.META.get('REMOTE_ADDR'),
             user_agent=request.META.get('HTTP_USER_AGENT'),
             referrer=request.META.get('HTTP_REFERER'),
-            session_key=request.session.session_key if hasattr(request, 'session') else None,
-            time_spent=0  # You can update this if you track time spent
+            session_key=request.session.session_key,  # This will now always have a value
+            time_spent=0
         )
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
@@ -363,8 +397,80 @@ class CommentListCreateView(generics.ListCreateAPIView):
         recipe_slug = self.kwargs.get('recipe_slug')
         context['recipe'] = get_object_or_404(Recipe, slug=recipe_slug)
         return context
+    
+    def perform_create(self, serializer):
+        # Save the comment first
+        comment = serializer.save()
+        
+        # Track the comment action
+        # Ensure session exists for unauthenticated users
+        if not self.request.user.is_authenticated:
+            if not self.request.session.session_key:
+                self.request.session.create()
+        
+        track_recipe_comment_manual(
+            recipe=comment.recipe,
+            user=self.request.user if self.request.user.is_authenticated else None,
+            ip_address=self.request.META.get('REMOTE_ADDR'),
+            session_key=self.request.session.session_key
+        )
 
 
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def share_recipe(request, recipe_id):
+    """Track when a recipe is shared"""
+    recipe = get_object_or_404(Recipe, id=recipe_id)
+    platform = request.data.get('platform', 'unknown')  # e.g., 'facebook', 'twitter', 'whatsapp', 'email', 'link'
+    
+    # Ensure session exists for unauthenticated users
+    if not request.user.is_authenticated:
+        if not request.session.session_key:
+            request.session.create()
+    
+    # Track the share action
+    track_recipe_share(
+        recipe=recipe,
+        user=request.user if request.user.is_authenticated else None,
+        platform=platform,
+        ip_address=request.META.get('REMOTE_ADDR'),
+        session_key=request.session.session_key
+    )
+    
+    return Response({
+        'status': 'shared',
+        'recipe_title': recipe.title,
+        'platform': platform
+    }, status=status.HTTP_200_OK)
+    
+# Alternative: Add share tracking to an existing endpoint or create a generic share endpoint
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def track_share(request):
+    """Generic endpoint to track recipe shares"""
+    recipe_id = request.data.get('recipe_id')
+    platform = request.data.get('platform', 'unknown')
+    
+    if not recipe_id:
+        return Response({'error': 'recipe_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    recipe = get_object_or_404(Recipe, id=recipe_id)
+    
+    # Ensure session exists for unauthenticated users
+    if not request.user.is_authenticated:
+        if not request.session.session_key:
+            request.session.create()
+    
+    # Track the share action
+    track_recipe_share(
+        recipe=recipe,
+        user=request.user if request.user.is_authenticated else None,
+        platform=platform,
+        ip_address=request.META.get('REMOTE_ADDR'),
+        session_key=request.session.session_key
+    )
+    
+    return Response({'status': 'tracked'}, status=status.HTTP_200_OK)
 class CommentDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = CommentSerializer
     permission_classes = [IsAuthorOrReadOnly]
@@ -398,7 +504,18 @@ def toggle_favorite(request, recipe_id):
         # Recipe was already favorited, so remove it
         favorite.delete()
         return Response({'status': 'removed'}, status=status.HTTP_200_OK)
-    
+    else:
+        # Track the save action when favorite is created
+        # Ensure session exists for tracking
+        if not request.session.session_key:
+            request.session.create()
+            
+        track_recipe_save_manual(
+            recipe=recipe,
+            user=request.user,
+            ip_address=request.META.get('REMOTE_ADDR'),
+            session_key=request.session.session_key
+        )
     return Response({'status': 'added'}, status=status.HTTP_201_CREATED)
 
 

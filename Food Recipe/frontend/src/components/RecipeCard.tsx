@@ -9,7 +9,7 @@ import { Share, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-materi
 import { useNavigate } from 'react-router-dom';
 
 interface RecipeCardProps {
-  recipe: any;
+  recipe: import('../types/Recipe').RecipeData;
   currentUserId?: number;
   onEdit?: () => void;
   onDelete?: () => void;
@@ -19,7 +19,7 @@ interface RecipeCardProps {
   isLiked?: boolean;
   showFavoriteButton?: boolean;
   showLikeButton?: boolean;
-  dashboardMode?: boolean;
+  dashboardType?: 'user' | 'chef';
 }
 
 const RecipeCard: React.FC<RecipeCardProps> = ({
@@ -33,26 +33,17 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
   isLiked = false,
   showFavoriteButton = true,
   showLikeButton = true,
-  dashboardMode = false,
+  dashboardType,
 }) => {
   const navigate = useNavigate();
 
-  // Only show actions if in dashboard and the current user is the author
-  const isOwner =
-    dashboardMode ||
-    (currentUserId != null &&
-      (recipe.author?.id === currentUserId || recipe.author === currentUserId));
-
   // Routing: use dashboard routes if in dashboard, else public
-  const categoryLink = dashboardMode
-    ? `/dashboard/chef/category/${recipe.category?.slug || recipe.category}`
-    : `/category/${recipe.category?.slug || recipe.category}`;
-  const recipeLink = dashboardMode
-    ? `/dashboard/chef/recipe/${recipe.slug || recipe.id}`
-    : `/recipe/${recipe.slug || recipe.id}`;
-  const authorProfileLink = dashboardMode
-    ? `/dashboard/chef/profile/${recipe.author?.id}`
-    : `/profile/${recipe.author?.id}`;
+  const recipeLink = dashboardType === 'chef'
+    ? `/dashboard/chef/recipe/${recipe.id}`
+    : dashboardType === 'user'
+      ? `/dashboard/user/recipe/${recipe.id}`
+      : `/recipe/${recipe.id}`;
+  const categoryLink = `/category/${recipe.category}`;
 
   return (
     <motion.div
@@ -66,7 +57,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
       {/* Image Section */}
       <div className="relative h-48 overflow-hidden">
         <img
-          src={recipe.imageUrl || recipe.image}
+          src={recipe.imageUrl}
           alt={recipe.title}
           className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform duration-300"
           onClick={e => { e.stopPropagation(); navigate(recipeLink); }}
@@ -108,7 +99,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
             className="text-xs font-semibold text-white px-3 py-1 bg-black/60 backdrop-blur-sm cursor-pointer hover:bg-amber-600 rounded-full transition-colors duration-200"
             onClick={e => { e.stopPropagation(); navigate(categoryLink); }}
           >
-            {typeof recipe.category === 'object' ? recipe.category.name : recipe.category}
+            {recipe.category}
           </span>
         </div>
       </div>
@@ -127,7 +118,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
           </div>
 
           {/* Owner Actions */}
-          {isOwner && (
+          {dashboardType === 'chef' && (
             <div className="flex items-center gap-1 ml-2">
               <Tooltip title="Edit Recipe">
                 <IconButton
@@ -183,7 +174,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
           {/* Author Info */}
           <div
             className="flex items-center cursor-pointer hover:opacity-80 transition-opacity duration-200"
-            onClick={e => { e.stopPropagation(); navigate(authorProfileLink); }}
+            onClick={e => { e.stopPropagation(); }}
           >
             <Avatar
               src={recipe.author.avatarUrl}

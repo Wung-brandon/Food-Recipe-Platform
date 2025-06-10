@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
@@ -40,13 +40,19 @@ import {
   ExpandLess
 } from '@mui/icons-material';
 import TitleText from '../components/TitleText';
-import { spaghetti } from '../components/images';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import axios from 'axios';
 import { Timer } from '../components/TimerComponent';
 import { toast } from 'react-toastify';
 import { Recipe } from '../types/Recipe';
+import RecipeLayoutWrapper from '../components/RecipeLayoutWrapper';
+import { 
+  generateRecipePDF, 
+  shareRecipe, 
+  printRecipe, 
+  formatDate, 
+  toggleRecipeFavorite,
+  getUserInfo 
+} from '../utils/recipeHelpers';
 
 interface ReviewReply {
   id: string;
@@ -103,117 +109,110 @@ const RecipeDetails: React.FC = () => {
   const [replyTexts, setReplyTexts] = useState<{[key: string]: string}>({});
   const [showReplyForm, setShowReplyForm] = useState<{[key: string]: boolean}>({});
   const [submittingReview, setSubmittingReview] = useState(false);
+  const [pdfGenerating, setPdfGenerating] = useState(false);
+
+  // Get user info for authentication-aware features
+  const { isAuthenticated, userId, userData } = getUserInfo();
 
   const fetchRecipe = async () => {
-      setLoading(true);
-      try {
-        // Fetch recipe details
-        const res = await axios.get(API_ENDPOINTS.recipeDetail(recipeId!));
-        const data = res.data;
+    setLoading(true);
+    try {
+      const res = await axios.get(API_ENDPOINTS.recipeDetail(recipeId!));
+      const data = res.data;
 
-        setRecipe({
-          id: data.id,
-          title: data.title,
-          description: data.description,
-          image: data.image || '/api/placeholder/400/300',
-          preparationTime: data.preparation_time,
-          cookingTime: data.cooking_time,
-          servings: data.servings,
-          difficulty: data.difficulty,
-          calories: data.calories,
-          rating: Number(data.average_rating) || 0,
-          ratingCount: data.rating_count || 0,
-          author: {
-            id: data.author?.id,
-            name: data.author?.username || data.author?.name || 'Chef',
-            avatar: data.author?.profile_picture || '/api/placeholder/50/50',
-          },
-          ingredients: (data.ingredients || []).map((ing: any) => ({
-            id: ing.id,
-            name: ing.name,
-            amount: ing.amount,
-            checked: false,
-          })),
-          steps: (data.steps || []).map((step: any) => ({
-            id: step.id,
-            description: step.description,
-            image: step.image,
-          })),
-          tips: (data.tips || []).map((tip: any) => tip.description || tip.tip || ''),
-          isFavorite: data.is_favorited || false,
-          category: data.category?.name || data.category || '',
-          tags: (data.tags || []).map((tag: any) => tag.name || tag),
-        });
+      setRecipe({
+        id: data.id,
+        title: data.title,
+        description: data.description,
+        image: data.image || '/api/placeholder/400/300',
+        preparationTime: data.preparation_time,
+        cookingTime: data.cooking_time,
+        servings: data.servings,
+        difficulty: data.difficulty,
+        calories: data.calories,
+        rating: Number(data.average_rating) || 0,
+        ratingCount: data.rating_count || 0,
+        author: {
+          id: data.author?.id,
+          name: data.author?.username || data.author?.name || 'Chef',
+          avatar: data.author?.profile_picture || '/api/placeholder/50/50',
+        },
+        ingredients: (data.ingredients || []).map((ing: any) => ({
+          id: ing.id,
+          name: ing.name,
+          amount: ing.amount,
+          checked: false,
+        })),
+        steps: (data.steps || []).map((step: any) => ({
+          id: step.id,
+          description: step.description,
+          image: step.image,
+        })),
+        tips: (data.tips || []).map((tip: any) => tip.description || tip.tip || ''),
+        isFavorite: data.is_favorited || false,
+        category: data.category?.name || data.category || '',
+        tags: (data.tags || []).map((tag: any) => tag.name || tag),
+      });
 
-        // Fetch related recipes (by category id)
-        if (data.category?.id) {
-          const relatedRes = await axios.get(API_BASE_URL + `/api/recipes/?category=${data.category.id}`);
-          setRelatedRecipes(
-            (relatedRes.data.results || relatedRes.data)
-              .filter((r: any) => r.id !== data.id)
-              .slice(0, 4)
-              .map((r: any) => ({
-                id: r.id,
-                title: r.title,
-                image: r.image || '/api/placeholder/400/300',
-                cookingTime: r.cooking_time || 0,
-                rating: Number(r.average_rating) || 0,
-              }))
-          );
-        } else {
-          setRelatedRecipes([]);
-        }
-      } catch (error: any) {
-        console.log('Error fetching recipe details:', error);
-        navigate('/not-found');
-      } finally {
-        setLoading(false);
+      if (data.category?.id) {
+        const relatedRes = await axios.get(API_BASE_URL + `/api/recipes/?category=${data.category.id}`);
+        setRelatedRecipes(
+          (relatedRes.data.results || relatedRes.data)
+            .filter((r: any) => r.id !== data.id)
+            .slice(0, 4)
+            .map((r: any) => ({
+              id: r.id,
+              title: r.title,
+              image: r.image || '/api/placeholder/400/300',
+              cookingTime: r.cooking_time || 0,
+              rating: Number(r.average_rating) || 0,
+            }))
+        );
+      } else {
+        setRelatedRecipes([]);
       }
-    };
+    } catch (error: any) {
+      console.log('Error fetching recipe details:', error);
+      navigate('/not-found');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchReviews = async () => {
-  try {
-    const res = await axios.get(API_ENDPOINTS.recipeReviews(recipeId!));
-    setAllReviews(
-      (res.data.results || []).map((item: any, idx: number) => ({
-        id: item.id || `review-${idx}`,
-        user: {
-          name: item.username || item.user?.name || 'Anonymous',
-          avatar: item.user?.avatar || '/api/placeholder/400/300'
-        },
-        date: formatDate(item.created_at),
-        rating: Number(item.rating || item.value),
-        content: item.review || item.text,
-        replies: []
-      }))
-    );
-    setRatingPercentages(res.data.rating_percentages || {});
-  } catch (err) {
-    setAllReviews([]);
-    setRatingPercentages({});
-  }
-};
-
-  const formatDate = (dateString: string) => {
-    if (!dateString) return 'Just now';
-    
-    const now = new Date();
-    const date = new Date(dateString);
-    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-    
-    if (diffInSeconds < 60) return 'Just now';
-    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`;
-    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
-    if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 86400)} days ago`;
-    
-    return date.toLocaleDateString();
+    try {
+      const res = await axios.get(API_ENDPOINTS.recipeReviews(recipeId!));
+      setAllReviews(
+        (res.data.results || []).map((item: any, idx: number) => ({
+          id: item.id || `review-${idx}`,
+          user: {
+            name: item.username || item.user?.name || 'Anonymous',
+            avatar: item.user?.avatar || '/api/placeholder/400/300'
+          },
+          date: formatDate(item.created_at),
+          rating: Number(item.rating || item.value),
+          content: item.review || item.text,
+          replies: []
+        }))
+      );
+      setRatingPercentages(res.data.rating_percentages || {});
+    } catch (err) {
+      setAllReviews([]);
+      setRatingPercentages({});
+    }
   };
 
   useEffect(() => {
     fetchRecipe();
     fetchReviews();
-    // eslint-disable-next-line
   }, [recipeId, navigate]);
+
+  // Set default username from user data if authenticated
+  useEffect(() => {
+    if (isAuthenticated && userData && !username) {
+      setUsername(userData.username || userData.name || '');
+    }
+  }, [isAuthenticated, userData, username]);
 
   const toggleIngredientCheck = (id: string) => {
     if (!recipe) return;
@@ -225,11 +224,23 @@ const RecipeDetails: React.FC = () => {
     });
   };
 
-  const toggleFavorite = () => {
+  const handleToggleFavorite = async () => {
     if (!recipe) return;
+    
+    if (!isAuthenticated) {
+      toast.info('Please log in to save recipes to favorites');
+      return;
+    }
+
+    const newFavoriteStatus = await toggleRecipeFavorite(
+      recipe.id, 
+      recipe.isFavorite, 
+      userId || undefined
+    );
+    
     setRecipe({
       ...recipe,
-      isFavorite: !recipe.isFavorite
+      isFavorite: newFavoriteStatus
     });
   };
 
@@ -250,9 +261,8 @@ const RecipeDetails: React.FC = () => {
       });
 
       if (response.status === 201) {
-        // Create the new review object to add to state immediately
         const newReview: Review = {
-          id: `temp-${Date.now()}`, // Temporary ID
+          id: `temp-${Date.now()}`,
           user: {
             name: username,
             avatar: '/api/placeholder/400/300'
@@ -263,20 +273,16 @@ const RecipeDetails: React.FC = () => {
           replies: []
         };
 
-        // Add the new review to the beginning of the list
         setAllReviews(prev => [newReview, ...prev]);
         
-        // Update recipe rating count immediately
         if (recipe) {
           setRecipe({
             ...recipe,
             ratingCount: recipe.ratingCount + 1,
-            // Optionally recalculate average rating
             rating: ((recipe.rating * recipe.ratingCount) + userRating) / (recipe.ratingCount + 1)
           });
         }
 
-        // Reset form
         setUserRating(null);
         setUsername('');
         setNewComment('');
@@ -291,37 +297,36 @@ const RecipeDetails: React.FC = () => {
   };
 
   const handleReplySubmit = async (reviewId: string) => {
-  const replyText = replyTexts[reviewId];
-  if (!replyText || !username) return;
+    const replyText = replyTexts[reviewId];
+    if (!replyText || !username) return;
 
-  try {
-    const response = await axios.post(
-      `${API_BASE_URL}/api/recipes/${recipeId}/comments/${reviewId}/reply/`,
-      {
-        username,
-        text: replyText,
-      }
-    );
-
-    if (response.status === 201) {
-      const reply = response.data.reply;
-      // Add the new reply to the UI
-      setAllReviews(prev =>
-        prev.map(review =>
-          review.id === reviewId
-            ? { ...review, replies: [...review.replies, reply] }
-            : review
-        )
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/api/recipes/${recipeId}/comments/${reviewId}/reply/`,
+        {
+          username,
+          text: replyText,
+        }
       );
-      toast.success('Reply added!');
+
+      if (response.status === 201) {
+        const reply = response.data.reply;
+        setAllReviews(prev =>
+          prev.map(review =>
+            review.id === reviewId
+              ? { ...review, replies: [...review.replies, reply] }
+              : review
+          )
+        );
+        toast.success('Reply added!');
+      }
+    } catch (err) {
+      toast.error('Failed to add reply.');
+    } finally {
+      setReplyTexts(prev => ({ ...prev, [reviewId]: '' }));
+      setShowReplyForm(prev => ({ ...prev, [reviewId]: false }));
     }
-  } catch (err) {
-    toast.error('Failed to add reply.');
-  } finally {
-    setReplyTexts(prev => ({ ...prev, [reviewId]: '' }));
-    setShowReplyForm(prev => ({ ...prev, [reviewId]: false }));
-  }
-};
+  };
 
   const toggleReplies = (reviewId: string) => {
     setExpandedReplies(prev => ({
@@ -337,132 +342,31 @@ const RecipeDetails: React.FC = () => {
     }));
   };
 
-  const handleShareRecipe = (platform: string) => {
+  const handleShareRecipe = async (platform: string) => {
     if (!recipe) return;
-    const recipeUrl = window.location.href;
-    const recipeTitle = recipe.title;
-    const recipeDescription = recipe.description.substring(0, 100) + '...';
-    switch (platform) {
-      case 'Facebook':
-        window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(recipeUrl)}`, '_blank');
-        break;
-      case 'Twitter':
-        window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(recipeTitle)}&url=${encodeURIComponent(recipeUrl)}`, '_blank');
-        break;
-      case 'WhatsApp':
-        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(recipeTitle + ' - ' + recipeUrl)}`, '_blank');
-        break;
-      case 'Pinterest':
-        window.open(`https://pinterest.com/pin/create/button/?url=${encodeURIComponent(recipeUrl)}&media=${encodeURIComponent(recipe.image)}&description=${encodeURIComponent(recipeTitle)}`, '_blank');
-        break;
-      case 'Email':
-        window.open(`mailto:?subject=${encodeURIComponent(recipeTitle)}&body=${encodeURIComponent(recipeDescription + '\n\nCheck out the full recipe here: ' + recipeUrl)}`, '_blank');
-        break;
-      case 'Copy Link':
-        navigator.clipboard.writeText(recipeUrl)
-          .then(() => {
-            toast.success('Recipe link copied to clipboard!');
-          })
-          .catch(err => {
-            console.error('Failed to copy link: ', err);
-          });
-        break;
-      default:
-        console.log(`Sharing to ${platform} not implemented yet`);
+    
+    try {
+      await shareRecipe(platform, recipe, userId || undefined);
+      setShowShareDialog(false);
+    } catch (error) {
+      console.error('Error sharing recipe:', error);
     }
-    setShowShareDialog(false);
   };
 
   const handlePrintRecipe = () => {
-    window.print();
+    printRecipe();
   };
 
   const handleDownloadPdf = async () => {
-    if (!recipe) return;
+    if (!recipe || pdfGenerating) return;
+    
+    setPdfGenerating(true);
     try {
-      setLoading(true);
-      const pdfContainer = document.createElement('div');
-      pdfContainer.className = 'pdf-container';
-      pdfContainer.style.width = '700px';
-      pdfContainer.style.padding = '20px';
-      pdfContainer.style.position = 'absolute';
-      pdfContainer.style.left = '-9999px';
-      pdfContainer.innerHTML = `
-        <div style="text-align: center; margin-bottom: 20px;">
-          <h1 style="font-size: 24px; color: #333;">${recipe.title}</h1>
-          <p style="color: #666;">By ${recipe.author.name}</p>
-        </div>
-        <div style="margin-bottom: 20px;">
-          <img src="${recipe.image}" style="width: 100%; max-height: 300px; object-fit: cover; border-radius: 8px;" />
-        </div>
-        <div style="margin-bottom: 20px;">
-          <p>${recipe.description}</p>
-        </div>
-        <div style="display: flex; gap: 15px; margin-bottom: 20px;">
-          <div style="flex: 1; text-align: center; padding: 10px; background: #f9f5eb; border-radius: 5px;">
-            <p style="font-weight: bold;">Prep Time</p>
-            <p>${recipe.preparationTime} min</p>
-          </div>
-          <div style="flex: 1; text-align: center; padding: 10px; background: #f9f5eb; border-radius: 5px;">
-            <p style="font-weight: bold;">Cook Time</p>
-            <p>${recipe.cookingTime} min</p>
-          </div>
-          <div style="flex: 1; text-align: center; padding: 10px; background: #f9f5eb; border-radius: 5px;">
-            <p style="font-weight: bold;">Servings</p>
-            <p>${recipe.servings}</p>
-          </div>
-        </div>
-        <div style="margin-bottom: 20px;">
-          <h2 style="font-size: 20px; color: #333;">Ingredients</h2>
-          <ul style="padding-left: 20px;">
-            ${recipe.ingredients.map(ing => `<li>${ing.amount} ${ing.name}</li>`).join('')}
-          </ul>
-        </div>
-        <div style="margin-bottom: 20px;">
-          <h2 style="font-size: 20px; color: #333;">Instructions</h2>
-          <ol style="padding-left: 20px;">
-            ${recipe.steps.map(step => `<li style="margin-bottom: 10px;">${step.description}</li>`).join('')}
-          </ol>
-        </div>
-        <div style="margin-bottom: 20px;">
-          <h2 style="font-size: 20px; color: #333;">Chef's Tips</h2>
-          <ul style="padding-left: 20px;">
-            ${recipe.tips.map(tip => `<li>${tip}</li>`).join('')}
-          </ul>
-        </div>
-        <div style="text-align: center; margin-top: 30px; font-size: 12px; color: #999;">
-          <p>Downloaded from PerfectRecipe.com on ${new Date().toLocaleDateString()}</p>
-        </div>
-      `;
-      document.body.appendChild(pdfContainer);
-      const canvas = await html2canvas(pdfContainer, {
-        scale: 2,
-        useCORS: true,
-        logging: false
-      });
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
-      const imgWidth = 210;
-      const imgHeight = canvas.height * imgWidth / canvas.width;
-      let position = 0;
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      const pageHeight = 297;
-      while (position < imgHeight) {
-        position += pageHeight - 10;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, -position, imgWidth, imgHeight);
-      }
-      pdf.save(`${recipe.title.replace(/\s+/g, '-').toLowerCase()}.pdf`);
-      document.body.removeChild(pdfContainer);
+      await generateRecipePDF(recipe);
     } catch (error) {
       console.error('Error generating PDF:', error);
-      toast.error('Failed to generate PDF. Please try again later.');
     } finally {
-      setLoading(false);
+      setPdfGenerating(false);
     }
   };
 
@@ -581,7 +485,7 @@ const RecipeDetails: React.FC = () => {
                 variant="outlined"
                 startIcon={recipe.isFavorite ? <Favorite /> : <FavoriteBorder />}
                 sx={{border: "2px solid #D97706", color: '#D97706'}}
-                onClick={toggleFavorite}
+                onClick={handleToggleFavorite}
                 className={recipe.isFavorite ? "text-red-500 border-red-500" : ""}
               >
                 {recipe.isFavorite ? 'Saved' : 'Save'}
@@ -966,7 +870,7 @@ const RecipeDetails: React.FC = () => {
                           <Collapse in={showReplyForm[review.id]}>
                             <div className="mt-4 pl-4 border-l-2 border-gray-200">
                               <div className="flex gap-3">
-                                <Avatar size="small" />
+                                <Avatar sx={{ width: 32, height: 32 }} />
                                 <div className="flex-1">
                                   <TextField
                                     fullWidth
@@ -1009,7 +913,7 @@ const RecipeDetails: React.FC = () => {
                               {review.replies.map((reply) => (
                                 <div key={reply.id} className="pl-4 border-l-2 border-gray-200">
                                   <div className="flex items-start gap-3">
-                                    <Avatar src={reply.user.avatar} alt={reply.user.name} size="small" />
+                                    <Avatar src={reply.user.avatar} alt={reply.user.name} sx={{ width: 32, height: 32 }} />
                                     <div className="flex-1">
                                       <div className="flex items-center gap-2 mb-1">
                                         <Typography variant="subtitle2" className="font-medium">

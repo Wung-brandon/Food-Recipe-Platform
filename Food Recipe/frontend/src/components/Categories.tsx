@@ -37,6 +37,7 @@ const CategoryList: React.FC = () => {
           colorStart: 'from-yellow-100',
           colorEnd: 'to-orange-200'
         }));
+        console.log('Fetched Categories:', apiCategories.map(cat => cat.name));
         setCategories(apiCategories);
       } catch (error) {
         // Fallback to hardcoded categories

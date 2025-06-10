@@ -166,7 +166,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     initializeAuth();
   }, []);
-
   // Login function
   const login = async (email: string, password: string) => {
     try {
@@ -174,38 +173,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         { email, password },
         { headers: { "Content-Type": "application/json" } }
       );
-  
       const { access, refresh } = response.data;
-
-      console.log("Login response:", response.data);
-  
-      // Ensure response data is valid
       if (!access || !refresh) {
         throw new Error("Invalid response from server");
       }
-  
-      // Store tokens in local storage
       localStorage.setItem('access_token', access);
       localStorage.setItem('refresh_token', refresh);
-  
-      // Fetch user details
       const userResponse = await axios.get(`${BaseUrl}api/auth/user/`, {
         headers: { Authorization: `Bearer ${access}` }
       });
-  
       const userData = userResponse.data;
-      console.log("User data:", userData);
-      
-      // Store user data
       localStorage.setItem('user', JSON.stringify(userData));
-  
-      // Set user and authentication state
       setUser(userData);
       setToken(access);
       setIsAuthenticated(true);
       setUserRole(userData.role || 'user');
-  
-      // Navigate based on user role
       if (userData.role === 'admin') {
         navigate("/admin-dashboard");
       } else if (userData.role === 'CHEF') {
@@ -213,10 +195,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         navigate("/dashboard/user");
       }
-  
       toast.success("Login Successful");
     } catch (error: any) {
-      // Handle specific error cases
       if (error.response?.status === 401 || error.response?.status === 400) {
         toast.error("Invalid credentials");
       } else if (error.message === "Invalid response from server") {

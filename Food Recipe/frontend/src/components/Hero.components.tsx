@@ -6,6 +6,7 @@ import {
   hamburger, ndole, achu, oslun, pepperBeef 
 } from "./images";
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 
 interface FoodImage {
   id: number;
@@ -36,6 +37,8 @@ const HeroSection: React.FC = () => {
     console.log('Search submitted:', searchValue);
     // Implement your search functionality here
   };
+
+  const navigate = useNavigate();
 
   return (
     <div className="bg-amber-100">
@@ -99,6 +102,7 @@ const HeroSection: React.FC = () => {
                   paddingX: 4,
                   paddingY: 1.5,
                 }}
+                onClick={() => navigate('/signup')}
               >
                 Get Started
               </Button>
@@ -116,6 +120,7 @@ const HeroSection: React.FC = () => {
                   paddingX: 4,
                   paddingY: 1.5,
                 }}
+                onClick={() => navigate('/explore-recipe')}
               >
                 Explore Recipes
               </Button>

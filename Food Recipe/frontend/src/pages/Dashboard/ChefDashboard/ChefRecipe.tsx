@@ -364,9 +364,9 @@ const handleDeleteConfirm = async () => {
                         <RecipeCard
                           recipe={recipe}
                           currentUserId={user?.id}
-                          onEdit={() => handleEditRecipe(recipe.id)}
-                          onDelete={() => handleDeleteClick(recipe.id)}
-                          dashboardMode={true}
+                          onEdit={() => handleEditRecipe(String(recipe.id))}
+                          onDelete={() => handleDeleteClick(String(recipe.id))}
+                          dashboardType="chef"
                           />
                         
                       </Box>

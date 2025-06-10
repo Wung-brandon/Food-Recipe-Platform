@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "recommendations.apps.RecommendationsConfig",
     "analytics.apps.AnalyticsConfig",
     "notifications.apps.NotificationsConfig",
+    "shop.apps.ShopConfig",
 
     "rest_framework",
     "corsheaders",

@@ -6,10 +6,10 @@ class RecipeView(models.Model):
     """Track individual recipe views"""
     recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name='analytics_views')
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, null=True, blank=True, related_name='analytics_recipe_views_user')  # null if anonymous
-    ip_address = models.GenericIPAddressField()
-    user_agent = models.TextField(blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True, null=True)
     referrer = models.URLField(blank=True, null=True)
-    session_key = models.CharField(max_length=40, blank=True)
+    session_key = models.CharField(max_length=40, blank=True, null=True)
     viewed_at = models.DateTimeField(auto_now_add=True)
     time_spent = models.IntegerField(default=0, help_text="Time spent viewing recipe in seconds")
     
@@ -23,8 +23,10 @@ class RecipeView(models.Model):
 
 class RecipeLike(models.Model):
     """Track recipe likes (separate from main recipe likes for analytics)"""
-    recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name='analytics_likes')
+    recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name='analytics_likes', null=True, blank=True)
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='analytics_recipe_likes_user')
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    session_key = models.CharField(max_length=40, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
@@ -34,8 +36,10 @@ class RecipeLike(models.Model):
 class RecipeComment(models.Model):
     """Track recipe comments"""
     recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name='analytics_comments')
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='analytics_recipe_comments_user')
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='analytics_recipe_comments_user', null=True, blank=True)
     comment = models.TextField()
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    session_key = models.CharField(max_length=40, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -57,6 +61,8 @@ class RecipeShare(models.Model):
     recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name='analytics_shares')
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, null=True, blank=True, related_name='analytics_recipe_shares_user')
     platform = models.CharField(max_length=20, choices=SHARE_PLATFORMS)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    session_key = models.CharField(max_length=40, null=True, blank=True)
     shared_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
@@ -66,6 +72,8 @@ class RecipeSave(models.Model):
     """Track recipe saves/bookmarks"""
     recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name='analytics_saves')
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='analytics_recipe_saves_user')
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    session_key = models.CharField(max_length=40, null=True, blank=True)
     saved_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:

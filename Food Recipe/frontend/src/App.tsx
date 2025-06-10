@@ -38,7 +38,7 @@ import { AuthProvider } from './context/AuthContext'
 import UserProfileDashboardPage from './pages/Dashboard/UserDashboard/UserProfilePage';
 import FavoriteRecipe from './pages/Dashboard/UserDashboard/FavoriteRecipe';
 import ChefDashboard from './pages/Dashboard/ChefDashboard/ChefDashboard';
-import UserDashboard from './pages/Dashboard/UserDashboard/UserDashboard';
+// import UserDashboard from './pages/Dashboard/UserDashboard/UserDashboard';
 import ChefRecipes from './pages/Dashboard/ChefDashboard/ChefRecipe';
 import ChefProfilePage from './pages/Dashboard/ChefDashboard/ChefProfile';
 import CreateRecipePage from './pages/Dashboard/ChefDashboard/ChefCreateRecipe';
@@ -49,6 +49,9 @@ import RecommendedRecipes from './pages/Recommendations';
 import IngredientSearch from './pages/IngredientSearch';
 import UserMealPlannerPage from './pages/MealPlannerPage';
 import AllNotificationsPage from './pages/AllNotifications';
+import UserDashboardLayout from './Layout/UserDashboardLayout';
+import DashboardLayout from './Layout/DashboardLayout';
+import UserDashboardPage from './pages/Dashboard/UserDashboard/UserDashboard';
 function App() {
     return (
       <>
@@ -83,7 +86,7 @@ function App() {
                 <Route path='/chat/:userId' element={<ChatPage />} />
                 <Route path='/user/:userId' element={<UserProfilePage />} />
               </Route>
-              <Route path="/recommendations" element={<RecommendedRecipes currentRecipeId={1} />} />
+              <Route path="/recommendations" element={<RecommendedRecipes />} />
               <Route path="/ingredient-search" element={<IngredientSearch />} />
               {/* Dashboard Routes without Main Navbar and Footer */}
 
@@ -99,7 +102,7 @@ function App() {
                 <Route path="/dashboard/chef/edit-recipe/:slug" element={<CreateRecipePage />} />
 
 
-                <Route path='/dashboard/user' element={<UserDashboard />}/>
+                <Route path='/dashboard/user' element={<UserDashboardPage />}/>
                 <Route index element={<DashboardPage />} />
                 <Route path='favorites' element={<FavoritesPage />} />
                 <Route path='messages' element={<MessagesPage />} />
@@ -114,6 +117,23 @@ function App() {
                 <Route path="/dashboard/user/meal-planner" element={<UserMealPlannerPage />} />
                 <Route path='profile' element={<ProfilePage />} />
               
+              {/* Dashboard-specific recipe detail routes */}
+              <Route
+                path="/dashboard/user/recipe/:recipeId"
+                element={
+                  <UserDashboardLayout title="Recipe Details">
+                    <RecipeDetails />
+                  </UserDashboardLayout>
+                }
+              />
+              <Route
+                path="/dashboard/chef/recipe/:recipeId"
+                element={
+                  <DashboardLayout title="Recipe Details">
+                    <RecipeDetails />
+                  </DashboardLayout>
+                }
+              />
             </Routes>
           </AuthProvider>
         </Router>

@@ -496,8 +496,7 @@ const SignupPage: React.FC = () => {
                 fullWidth 
                 type="submit" 
                 variant="contained" 
-                color="primary" 
-                sx={{ mt: 2 }}
+                sx={{ backgroundColor: "#d97706", mt: 2 }}
                 disabled={loading}
               >
                 {loading ? "Processing..." : "Sign Up"}

@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useNavigate, Link } from "react-router-dom";
 import { Menu, X } from 'lucide-react';
 import IconButton from '@mui/material/IconButton';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import Badge, { BadgeProps } from '@mui/material/Badge';
 import { styled } from '@mui/material/styles';
+import { useTranslation } from 'react-i18next';
 
 const navLinks = [
   { name: 'Home', link: '/' },
@@ -25,12 +26,19 @@ const StyledBadge = styled(Badge)<BadgeProps>(({ theme }) => ({
 
 const Navbar: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const { i18n } = useTranslation();
   const navigate = useNavigate();
+  const [isLanguageOpen, setIsLanguageOpen] = useState(false);
 
   const handleMobileLinkClick = () => {
     setIsOpen(false); // close menu after clicking
   };
 
+  console.log("Current Language:", i18n.language);
+  const changeLanguage = (languageCode: string) => {
+    i18n.changeLanguage(languageCode);
+    setIsLanguageOpen(false); // Close language dropdown after selection
+  };
   return (
     <header className="font-bold shadow-md sticky top-0 bg-white z-50">
       <nav className="flex justify-between items-center p-6 relative z-10">
@@ -62,6 +70,24 @@ const Navbar: React.FC = () => {
               </li>
             ))}
           </ul>
+
+          {/* Language Selector */}
+          {/* <div className="relative">
+            <button
+              onClick={() => setIsLanguageOpen(!isLanguageOpen)}
+              className="text-xl text-gray-700 hover:text-amber-600 transition duration-300 focus:outline-none"
+            >
+              Language
+            </button>
+            {isLanguageOpen && (
+              <div className="absolute top-full left-0 mt-2 w-24 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5">
+                <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="language-selector">
+                  <Link to="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem" onClick={() => changeLanguage('en')}>English</Link>
+                  <Link to="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem" onClick={() => changeLanguage('fr')}>French</Link>
+                </div>
+              </div>
+            )}
+          </div> */}
         </div>
 
         {/* Desktop Buttons */}
@@ -115,6 +141,32 @@ const Navbar: React.FC = () => {
               </li>
             ))}
           </ul>
+
+          {/* Mobile Language Selector */}
+          <div className="relative mt-4">
+            <button
+              onClick={() => setIsLanguageOpen(!isLanguageOpen)}
+              className="block w-full text-lg text-black hover:text-amber-600 transition duration-300 focus:outline-none py-2"
+            >
+              Language
+            </button>
+            {isLanguageOpen && (
+              <div className="absolute top-full left-0 mt-2 w-full rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-20">
+                <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="mobile-language-selector">
+                  <Link to="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem" onClick={() => {
+                    changeLanguage('en');
+                    setIsOpen(false);
+                  }}>English</Link>
+                  <Link to="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem" onClick={() => {
+                    changeLanguage('fr');
+                    setIsOpen(false);
+                  }}>French</Link>
+
+
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Mobile Buttons */}
           <div className="mt-6 space-y-3">

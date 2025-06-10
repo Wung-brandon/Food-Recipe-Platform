@@ -43,7 +43,8 @@ urlpatterns = [
     # Favorite and Like toggles
     path('recipes/<slug:recipe_slug>/favorite/', views.toggle_favorite, name='toggle-favorite'),
     path('recipes/<slug:recipe_slug>/like/', views.toggle_like, name='toggle-like'),
-    
+    path('recipes/<int:recipe_id>/share/', views.share_recipe, name='share-recipe'),
+    path('track-share/', views.track_share, name='track-share'),
     # Search endpoint
     path('search/', views.SearchRecipesView.as_view(), name='search-recipes'),
 

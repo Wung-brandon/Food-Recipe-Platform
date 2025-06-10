@@ -14,131 +14,15 @@ import {
   TextField, 
   Avatar,
  } from '@mui/material';
+import axios from 'axios';
 
 import { 
-  spaghetti, 
-  ekwang, 
-  ndole, 
-  achu, 
-  pizza, 
-  pepperBeef,
   chef
  } from "../components/images";
 import RecipeCard from '../components/RecipeCard';
+import { RecipeData } from '../types/Recipe';
 // Sample image imports (replace with your actual imports)
 const sampleImage = "/api/placeholder/300/200";
-
-// Sample recipe data
-const recipeData = [
-  {
-    id: 1,
-    title: "Mushroom Risotto",
-    category: "Vegetarian",
-    imageUrl: spaghetti,
-    cookTime: 45,
-    difficulty: "Medium",
-    rating: 4.7,
-    reviewCount: 128,
-    author: {
-      name: "Chef Alex",
-      avatarUrl: spaghetti
-    },
-    isSaved: true,
-    isLiked: true,
-    likeCount: 87,
-    createdAt: "2024-01-15"
-  },
-  {
-    id: 2,
-    title: "Blueberry Pancakes",
-    category: "Breakfast",
-    imageUrl: ekwang,
-    cookTime: 20,
-    difficulty: "Easy",
-    rating: 4.9,
-    reviewCount: 203,
-    author: {
-      name: "Jamie Wilson",
-      avatarUrl: ekwang
-    },
-    isSaved: false,
-    isLiked: true,
-    likeCount: 142,
-    createdAt: "2024-02-10"
-  },
-  {
-    id: 3,
-    title: "Chocolate Soufflé",
-    category: "Desserts",
-    imageUrl: pepperBeef,
-    cookTime: 60,
-    difficulty: "Hard",
-    rating: 4.5,
-    reviewCount: 76,
-    author: {
-      name: "Pastry Master",
-      avatarUrl: pepperBeef
-    },
-    isSaved: true,
-    isLiked: false,
-    likeCount: 53,
-    createdAt: "2024-01-28"
-  },
-  {
-    id: 4,
-    title: "Avocado Toast",
-    category: "Breakfast",
-    imageUrl: ndole,
-    cookTime: 10,
-    difficulty: "Easy",
-    rating: 4.3,
-    reviewCount: 182,
-    author: {
-      name: "Health Guru",
-      avatarUrl: ndole
-    },
-    isSaved: false,
-    isLiked: false,
-    likeCount: 94,
-    createdAt: "2024-02-22"
-  },
-  {
-    id: 5,
-    title: "Homemade Sourdough",
-    category: "Baked Food",
-    imageUrl: achu,
-    cookTime: 180,
-    difficulty: "Hard",
-    rating: 4.8,
-    reviewCount: 156,
-    author: {
-      name: "Bread Master",
-      avatarUrl: achu
-    },
-    isSaved: true,
-    isLiked: true,
-    likeCount: 112,
-    createdAt: "2024-01-05"
-  },
-  {
-    id: 6,
-    title: "Garden Salad",
-    category: "Vegetarian",
-    imageUrl: pizza,
-    cookTime: 15,
-    difficulty: "Easy",
-    rating: 4.1,
-    reviewCount: 89,
-    author: {
-      name: "Fresh Foodie",
-      avatarUrl: pizza
-    },
-    isSaved: false,
-    isLiked: true,
-    likeCount: 67,
-    createdAt: "2024-02-18"
-  },
-];
 
 // Define most followed chefs
 const topChefs = [
@@ -168,29 +52,84 @@ const topChefs = [
 
 
 // Main Component
-const ExploreRecipesPage: React.FC = () => {  // Changed component name to match file name
+const ExploreRecipesPage: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
-  const [filteredRecipes, setFilteredRecipes] = useState(recipeData);
-  
-  const categories = [
-    { id: "ALL", label: "All", icon: <Restaurant /> },
-    { id: "Vegetarian", label: "Vegetarian", icon: <Restaurant /> },
-    { id: "Desserts", label: "Desserts", icon: <Cake /> },
-    { id: "Breakfast", label: "Breakfast", icon: <FreeBreakfast /> },
-    { id: "Lunch", label: "Lunch", icon: <Fastfood /> },
-    { id: "Baked Food", label: "Baked Food", icon: <LocalPizza /> },  // Changed to LocalPizza
-  ];
-  
+  const [filteredRecipes, setFilteredRecipes] = useState<RecipeData[]>([]);
+  const [allRecipes, setAllRecipes] = useState<RecipeData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [categories, setCategories] = useState<{ id: string; label: string; icon: React.ReactNode }[]>([]);
+
   useEffect(() => {
-    let result = recipeData;
-    
-    // Filter by category
+    const fetchRecipes = async () => {
+      setLoading(true);
+      try {
+        const response = await axios.get('http://localhost:8000/api/recipes/');
+        const apiRecipes = (response.data.results || response.data).map((r: Record<string, unknown>) => {
+          let category = '';
+          if (typeof r.category === 'object' && r.category !== null) {
+            category = (r.category as { name?: string }).name || '';
+          } else if (typeof r.category === 'string') {
+            category = r.category;
+          }
+          let authorName = 'Chef';
+          let authorAvatar = '';
+          if (typeof r.author === 'object' && r.author !== null) {
+            authorName = (r.author as { username?: string; name?: string }).username || (r.author as { name?: string }).name || 'Chef';
+            authorAvatar = (r.author as { profile_picture?: string }).profile_picture || '';
+          }
+          return {
+            id: r.id as number,
+            title: r.title as string,
+            category,
+            imageUrl: r.image as string || '',
+            cookTime: (r.preparation_time as number || 0) + (r.cooking_time as number || 0),
+            difficulty: r.difficulty as string || '',
+            rating: Number(r.average_rating) || 0,
+            reviewCount: (r.rating_count as number) || 0,
+            author: {
+              name: authorName,
+              avatarUrl: authorAvatar,
+            },
+            isSaved: Boolean(r.is_favorited),
+            isLiked: false,
+            likeCount: (r.like_count as number) || 0,
+            createdAt: r.created_at as string || '',
+          } as RecipeData;
+        });
+        setAllRecipes(apiRecipes);
+      } catch {
+        setAllRecipes([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchRecipes();
+  }, []);
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await axios.get('http://localhost:8000/api/categories/');
+        const fallbackIcons = [<Restaurant />, <Cake />, <FreeBreakfast />, <Fastfood />, <LocalPizza />];
+        const apiCategories = (response.data.results || response.data).map((cat: Record<string, unknown>, idx: number) => ({
+          id: (cat.name as string) || String(cat.id),
+          label: (cat.name as string) || String(cat.id),
+          icon: fallbackIcons[idx % fallbackIcons.length],
+        }));
+        setCategories([{ id: 'ALL', label: 'All', icon: <span /> }, ...apiCategories]);
+      } catch {
+        setCategories([{ id: 'ALL', label: 'All', icon: <span /> }]);
+      }
+    };
+    fetchCategories();
+  }, []);
+
+  useEffect(() => {
+    let result = allRecipes;
     if (activeCategory !== "ALL") {
       result = result.filter(recipe => recipe.category === activeCategory);
     }
-    
-    // Filter by search query
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       result = result.filter(recipe => 
@@ -199,9 +138,8 @@ const ExploreRecipesPage: React.FC = () => {  // Changed component name to match
         recipe.category.toLowerCase().includes(query)
       );
     }
-    
     setFilteredRecipes(result);
-  }, [activeCategory, searchQuery]);
+  }, [activeCategory, searchQuery, allRecipes]);
   
   return (
     <div className="min-h-screen bg-gray-50">
@@ -302,38 +240,42 @@ const ExploreRecipesPage: React.FC = () => {  // Changed component name to match
               </motion.div>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredRecipes.map((recipe, index) => (
-                <motion.div
-                  key={recipe.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4, delay: 0.1 * index }}
-                >
-                  <RecipeCard recipe={recipe} />
-                </motion.div>
-              ))}
-              
-              {filteredRecipes.length === 0 && (
-                <motion.div 
-                  className="col-span-full py-16 text-center"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <p className="text-lg text-gray-500">No recipes found matching your criteria</p>
-                  <button 
-                    className="mt-4 px-5 py-2 bg-amber-600 text-white rounded-full hover:bg-amber-700 transition-colors"
-                    onClick={() => {
-                      setActiveCategory("ALL");
-                      setSearchQuery("");
-                    }}
+            {loading ? (
+              <div className="py-10 text-center text-gray-500">Loading...</div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredRecipes.map((recipe, index) => (
+                  <motion.div
+                    key={recipe.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, delay: 0.1 * index }}
                   >
-                    Reset Filters
-                  </button>
-                </motion.div>
-              )}
-            </div>
+                    <RecipeCard recipe={recipe} />
+                  </motion.div>
+                ))}
+                
+                {filteredRecipes.length === 0 && (
+                  <motion.div 
+                    className="col-span-full py-16 text-center"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <p className="text-lg text-gray-500">No recipes found matching your criteria</p>
+                    <button 
+                      className="mt-4 px-5 py-2 bg-amber-600 text-white rounded-full hover:bg-amber-700 transition-colors"
+                      onClick={() => {
+                        setActiveCategory("ALL");
+                        setSearchQuery("");
+                      }}
+                    >
+                      Reset Filters
+                    </button>
+                  </motion.div>
+                )}
+              </div>
+            )}
           </div>
           
           {/* Sidebar */}
@@ -407,7 +349,7 @@ const ExploreRecipesPage: React.FC = () => {  // Changed component name to match
       </div>
       
       {/* Custom CSS for hiding scrollbar */}
-      <style jsx global>{`
+      <style>{`
         .hide-scrollbar {
           -ms-overflow-style: none;
           scrollbar-width: none;

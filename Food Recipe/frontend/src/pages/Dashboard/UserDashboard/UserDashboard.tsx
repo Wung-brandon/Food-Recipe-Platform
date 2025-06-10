@@ -3,16 +3,12 @@ import {
   Grid, 
   Paper, 
   Typography, 
-  Card, 
-  CardContent, 
-  CardMedia, 
   Button,
   Box,
   TextField,
   InputAdornment,
   Tabs,
   Tab,
-  Chip,
   Divider,
   CircularProgress
 } from '@mui/material';
@@ -25,30 +21,17 @@ import {
 import UserDashboardLayout from '../../../Layout/UserDashboardLayout';
 import { useAuth } from '../../../context/AuthContext';
 import axios from 'axios';
-
-// Define recipe type
-interface Recipe {
-  id: number;
-  title: string;
-  image: string;
-  preparation_time: number;
-  cooking_time: number;
-  average_rating: number;
-  author: {
-    username: string;
-    is_chef: boolean;
-  };
-}
+import RecipeCard from '../../../components/RecipeCard';
 
 const API_BASE_URL = 'http://localhost:8000';
 const API_ENDPOINTS = {
   recipes: `${API_BASE_URL}/api/recipes/`,
 };
 
-const UserDashboard: React.FC = () => {
+const UserDashboardPage: React.FC = () => {
   const { user } = useAuth();
   const [tabValue, setTabValue] = useState(0);
-  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [recipes, setRecipes] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
@@ -56,7 +39,6 @@ const UserDashboard: React.FC = () => {
       setLoading(true);
       try {
         const response = await axios.get(API_ENDPOINTS.recipes, { withCredentials: true });
-        // Adjust mapping if your API response structure is different
         setRecipes(response.data.results || response.data);
       } catch (error) {
         console.error('Error fetching recipes:', error);
@@ -71,58 +53,6 @@ const UserDashboard: React.FC = () => {
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
   };
-
-  const RecipeCard: React.FC<{ recipe: Recipe }> = ({ recipe }) => (
-    <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <CardMedia
-        component="img"
-        height="140"
-        image={recipe.image}
-        alt={recipe.title}
-      />
-      <CardContent sx={{ flexGrow: 1 }}>
-        <Typography gutterBottom variant="h6" component="div" noWrap>
-          {recipe.title}
-        </Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-          <Typography variant="body2" color="text.secondary">
-            By {recipe.author.username}
-          </Typography>
-          {recipe.author.is_chef && (
-            <Chip 
-              label="Chef" 
-              size="small" 
-              color="primary" 
-              sx={{ ml: 1, bgcolor: '#d97706' }} 
-            />
-          )}
-        </Box>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <ScheduleIcon fontSize="small" color="action" />
-            <Typography variant="body2" color="text.secondary" sx={{ ml: 0.5 }}>
-              {recipe.preparation_time + recipe.cooking_time} min
-            </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <StarIcon fontSize="small" sx={{ color: '#f59e0b' }} />
-            <Typography variant="body2" color="text.secondary" sx={{ ml: 0.5 }}>
-              {recipe.average_rating}
-            </Typography>
-          </Box>
-        </Box>
-      </CardContent>
-      <Box sx={{ p: 2, pt: 0 }}>
-        <Button 
-          variant="contained" 
-          fullWidth
-          sx={{ backgroundColor: '#d97706', '&:hover': { backgroundColor: '#b45309' } }}
-        >
-          View Recipe
-        </Button>
-      </Box>
-    </Card>
-  );
 
   return (
     <UserDashboardLayout title="User Dashboard">
@@ -200,7 +130,27 @@ const UserDashboard: React.FC = () => {
                 <Grid container spacing={3}>
                   {recipes.map((recipe) => (
                     <Grid item xs={12} sm={6} md={4} lg={3} key={recipe.id}>
-                      <RecipeCard recipe={recipe} />
+                      <RecipeCard
+                        recipe={{
+                          id: recipe.id,
+                          title: recipe.title,
+                          category: '', // You can map this if you have category info
+                          imageUrl: recipe.image,
+                          cookTime: recipe.preparation_time + recipe.cooking_time,
+                          difficulty: '', // Map if available
+                          rating: recipe.average_rating,
+                          reviewCount: 0, // Map if available
+                          author: {
+                            name: recipe.author.username,
+                            avatarUrl: '', // Map if available
+                          },
+                          isSaved: false,
+                          isLiked: false,
+                          likeCount: 0,
+                        }}
+                        dashboardType="user"
+                        // Remove onEdit/onDelete for user dashboard
+                      />
                     </Grid>
                   ))}
                 </Grid>
@@ -213,4 +163,4 @@ const UserDashboard: React.FC = () => {
   );
 };
 
-export default UserDashboard;
+export default UserDashboardPage;
