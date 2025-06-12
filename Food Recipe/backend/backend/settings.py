@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "analytics.apps.AnalyticsConfig",
     "notifications.apps.NotificationsConfig",
     "shop.apps.ShopConfig",
+    "order.apps.OrderConfig",
 
     "rest_framework",
     "corsheaders",
@@ -62,6 +63,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "shop.middleware.GuestSessionMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -96,8 +98,25 @@ WSGI_APPLICATION = "backend.wsgi.application"
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173"
 ]
-CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOW_ALL_ORIGINS = True  # Only for development!
+
+# Allow credentials for session handling
 CORS_ALLOW_CREDENTIALS = True
+
+# Allowed headers
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+    'x-guest-session',  
+]
+
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 

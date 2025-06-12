@@ -158,42 +158,10 @@ const RecipesPage: React.FC = () => {
     fetchRecipes();
   }, []);
 
-  // Toggle favorite functionality
-  const handleToggleFavorite = async (recipeId: number) => {
-    try {
-      await axios.post(
-        API_ENDPOINTS.toggleFavorite(recipeId), 
-        {}, 
-        { withCredentials: true }
-      );
-      
-      // Update local state
-      const updatedRecipes = recipes.map(recipe => 
-        recipe.id === recipeId 
-          ? { ...recipe, is_favorited: !recipe.is_favorited }
-          : recipe
-      );
-      setRecipes(updatedRecipes);
-      
-      // Also update filtered recipes
-      const updatedFilteredRecipes = filteredRecipes.map(recipe => 
-        recipe.id === recipeId 
-          ? { ...recipe, is_favorited: !recipe.is_favorited }
-          : recipe
-      );
-      setFilteredRecipes(updatedFilteredRecipes);
-      
-      toast.success('Recipe updated in favorites!');
-    } catch (err) {
-      console.error('Failed to toggle favorite:', err);
-      toast.error('Failed to update favorite');
-    }
-  };
-
   // Filter and search logic
   useEffect(() => {
     const applyFilters = () => {
-      let filtered = recipes.filter(recipe => {
+      const filtered = recipes.filter(recipe => {
         // Search term filter
         const matchesSearch = recipe.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                             recipe.description.toLowerCase().includes(searchTerm.toLowerCase());
@@ -266,35 +234,6 @@ const RecipesPage: React.FC = () => {
 
   // Count active filters
   const activeFilterCount = Object.values(filters).filter(Boolean).length + (searchTerm ? 1 : 0);
-
-  // Convert API recipe to RecipeData format for RecipeCard
-  const convertToRecipeData = (apiRecipe: APIRecipe): RecipeData => ({
-  id: apiRecipe.id,
-  title: apiRecipe.title,
-  description: apiRecipe.description,
-  image: apiRecipe.image,
-  category: apiRecipe.category.name,
-  difficulty: apiRecipe.difficulty,
-  cookTime: apiRecipe.preparation_time + apiRecipe.cooking_time,
-  servings: apiRecipe.servings,
-  rating: apiRecipe.average_rating ? parseFloat(apiRecipe.average_rating) : 0,
-  author: {
-    name: apiRecipe.author.username,
-    avatarUrl: apiRecipe.author.profile_image || '',
-    id: apiRecipe.author.id,
-  },
-  createdAt: apiRecipe.created_at,
-  ingredients: [],
-  instructions: [],
-  tags: [],
-  calories: apiRecipe.calories || 0,
-  prepTime: apiRecipe.preparation_time,
-  isFavorited: apiRecipe.is_favorited,
-  isLiked: apiRecipe.is_liked,
-  likeCount: apiRecipe.like_count, // <-- use likeCount, not likesCount
-  ratingsCount: apiRecipe.rating_count,
-  reviewCount: apiRecipe.rating_count,
-});
 
   // Loading skeleton
   const LoadingSkeleton = () => (
@@ -431,48 +370,95 @@ const RecipesPage: React.FC = () => {
   async function handleToggleLike(id: number | undefined): Promise<void> {
     if (!id) return;
     try {
-      // You may need to implement a like API endpoint similar to favorite
-      const response = await axios.post(
-        `${API_BASE_URL}/api/recipes/${id}/like/`,
-        {},
-        { withCredentials: true }
-      );
-
-      // Update local state for recipes
+      // Optimistically update UI
       const updatedRecipes = recipes.map(recipe =>
         recipe.id === id
           ? {
               ...recipe,
               is_liked: !recipe.is_liked,
-              likesCount: recipe.is_liked
-                ? recipe.likesCount - 1
-                : recipe.likesCount + 1,
+              likeCount: recipe.is_liked
+                ? recipe.likeCount - 1
+                : recipe.likeCount + 1,
             }
           : recipe
       );
       setRecipes(updatedRecipes);
-
       // Update local state for filtered recipes
       const updatedFilteredRecipes = filteredRecipes.map(recipe =>
         recipe.id === id
           ? {
               ...recipe,
               is_liked: !recipe.is_liked,
-              likesCount: recipe.is_liked
-                ? recipe.likesCount - 1
-                : recipe.likesCount + 1,
+              likeCount: recipe.is_liked
+                ? recipe.likeCount - 1
+                : recipe.likeCount + 1,
             }
           : recipe
       );
       setFilteredRecipes(updatedFilteredRecipes);
-
+      // Make API call
+      await axios.post(`${API_BASE_URL}/api/recipes/${id}/like/`, {}, { withCredentials: true });
       toast.success('Recipe like updated!');
-    } catch (err) {
-      console.error('Failed to toggle like:', err);
-      toast.error('Failed to update like');
+    } catch (err: any) {
+      if (err.response && err.response.status === 400 && err.response.data && err.response.data.detail && err.response.data.detail.includes('already liked')) {
+        toast.info('Recipe already liked.');
+      } else {
+        toast.error('Failed to update like');
+      }
     }
   }
 
+  // Toggle favorite handler
+  async function handleToggleFavorite(id: number | undefined): Promise<void> {
+    if (!id) return;
+    try {
+      // Optimistically update UI
+      const updatedRecipes = recipes.map(recipe =>
+        recipe.id === id
+          ? {
+              ...recipe,
+              is_favorited: !recipe.is_favorited,
+            }
+          : recipe
+      );
+      setRecipes(updatedRecipes);
+      // Update local state for filtered recipes
+      const updatedFilteredRecipes = filteredRecipes.map(recipe =>
+        recipe.id === id
+          ? {
+              ...recipe,
+              is_favorited: !recipe.is_favorited,
+            }
+          : recipe
+      );
+      setFilteredRecipes(updatedFilteredRecipes);
+      // Make API call
+      await axios.post(`${API_BASE_URL}/api/recipes/${id}/favorite/`, {}, { withCredentials: true });
+      toast.success('Recipe saved to favorites!');
+    } catch (err: any) {
+      if (err.response && err.response.status === 500 && err.response.data && typeof err.response.data === 'string' && err.response.data.includes('duplicate key value')) {
+        toast.info('Recipe already saved to favorites.');
+      } else if (err.response && err.response.status === 400 && err.response.data && err.response.data.detail && err.response.data.detail.includes('already saved')) {
+        toast.info('Recipe already saved to favorites.');
+      } else {
+        toast.error('Failed to update favorite');
+      }
+    }
+  }
+
+  // Helper to get category name as string
+  function getCategoryName(category: unknown): string {
+    if (typeof category === 'string') return category;
+    if (
+      category &&
+      typeof category === 'object' &&
+      'name' in category &&
+      typeof (category as { name: unknown }).name === 'string'
+    ) {
+      return (category as { name: string }).name;
+    }
+    return '';
+  }
   return (
     <UserDashboardLayout title="All Recipes">
       <Box sx={{ mb: { xs: 3, md: 4 } }}>
@@ -710,12 +696,31 @@ const RecipesPage: React.FC = () => {
               {filteredRecipes.map((recipe) => (
                 <Grid item xs={12} sm={6} md={isLargeScreen ? 4 : 6} lg={4} xl={3} key={recipe.id}>
                   <RecipeCard
-                    recipe={convertToRecipeData(recipe)}
-                    isFavorited={recipe.isFavorited}
-                    isLiked={recipe.isLiked}
-                    onToggleFavorite={() => handleToggleFavorite(recipe.id)}
-                    onToggleLike={() => handleToggleLike(recipe.id)}
-                  />
+                        recipe={{
+                          id: recipe.id,
+                          title: recipe.title,
+                          category: getCategoryName(recipe.category),
+                          imageUrl: recipe.image,
+                          cookTime: recipe.preparation_time + recipe.cooking_time,
+                          difficulty: '', // Map if available
+                          rating: recipe.average_rating,
+                          reviewCount: 0, // Map if available
+                          author: {
+                            name: recipe.author.username,
+                            avatarUrl: '', // Map if available
+                          },
+                          isSaved: false,
+                          isLiked: false,
+                          likeCount: 0,
+                        }}
+                        dashboardType="user"
+                        // Remove onEdit/onDelete for user dashboard
+                        isFavorited={recipe.is_favorited}
+                        onToggleFavorite={() => handleToggleFavorite(recipe.id)}
+                        onToggleLike={() => handleToggleLike(recipe.id)}
+                        isLiked={recipe.is_liked}
+                        likeCount={recipe.likeCount}
+                      />
                 </Grid>
               ))}
             </Grid>

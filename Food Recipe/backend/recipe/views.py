@@ -256,7 +256,8 @@ class RecipeListCreateView(generics.ListCreateAPIView):
     filterset_class = RecipeFilter
     search_fields = ['title', 'description', 'author__username', 'category__name', 'tags__name']
     ordering_fields = ['created_at', 'preparation_time', 'cooking_time', 'servings']
-    
+    pagination_class = None  # Disable pagination to return all recipes
+
     def get_serializer_class(self):
         if self.request.method == 'POST':
             return RecipeCreateUpdateSerializer
@@ -310,6 +311,7 @@ class RecipeListCreateView(generics.ListCreateAPIView):
 
 class RecipeDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Recipe.objects.all()
+    serializer_class = RecipeDetailSerializer
     lookup_field = 'id'
     # Include IsVerifiedChef permission to ensure only verified chefs can update
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
@@ -325,14 +327,13 @@ class RecipeDetailView(generics.RetrieveUpdateDestroyAPIView):
             rating_count=Count('ratings', distinct=True),
             like_count=Count('likes', distinct=True)
         )
-
+    
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
         # Ensure session exists for unauthenticated users
         if not request.user.is_authenticated:
             if not request.session.session_key:
                 request.session.create()
-        
         # Track the view
         track_recipe_view(
             recipe=instance,
@@ -344,6 +345,17 @@ class RecipeDetailView(generics.RetrieveUpdateDestroyAPIView):
             time_spent=0
         )
         serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        if not serializer.is_valid():
+            logger.error(f"Recipe update error: {serializer.errors}")
+            print(f"Recipe update error: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        self.perform_update(serializer)
         return Response(serializer.data)
 
 # Add this new view to create recipe drafts that will be ready for publishing once verified
@@ -657,7 +669,7 @@ class MealPlanListCreateView(generics.ListCreateAPIView):
                 )
 
             # Validate meal types
-            valid_meal_types = ['Breakfast', 'Lunch', 'Dinner', 'Snack']
+            valid_meal_types = ['Breakfast', 'Lunch', 'Dinner']
             invalid_types = [mt for mt in meal_types if mt not in valid_meal_types]
             if invalid_types:
                 error_msg = f"Invalid meal types: {invalid_types}"
@@ -776,6 +788,9 @@ class MealPlanListCreateView(generics.ListCreateAPIView):
         # This method is no longer used since we override create()
         pass
 
+
+
+
 class MealPlanDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = MealPlan.objects.all()
     serializer_class = MealPlanSerializer
@@ -850,3 +865,26 @@ class ShoppingListView(APIView):
 
         serializer = ShoppingListSerializer({'ingredients': shopping_list})
         return Response(serializer.data)
+
+class RelatedRecipesView(APIView):
+    """
+    API endpoint to get related recipes for a given recipe (by id).
+    Relatedness is based on category and tags, excluding the current recipe.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, recipe_id):
+        recipe = get_object_or_404(Recipe, id=recipe_id)
+        # Get recipes in the same category or sharing at least one tag, excluding the current recipe
+        tag_ids = recipe.tags.values_list('id', flat=True)
+        queryset = Recipe.objects.filter(
+            Q(category=recipe.category) | Q(tags__in=tag_ids)
+        ).exclude(id=recipe.id).distinct()
+        # Optionally, limit the number of related recipes (e.g., 6)
+        queryset = queryset.annotate(
+            average_rating=Avg('ratings__value'),
+            rating_count=Count('ratings', distinct=True),
+            like_count=Count('likes', distinct=True)
+        )[:6]
+        serializer = RecipeListSerializer(queryset, many=True, context={'request': request})
+        return Response({'related_recipes': serializer.data})

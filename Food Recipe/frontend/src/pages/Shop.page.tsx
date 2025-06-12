@@ -1,472 +1,150 @@
-// import React, { useState } from "react";
-// import { TextField, Typography, Grid, Card, CardContent, CardMedia, Button } from "@mui/material";
-// import { motion } from "framer-motion";
-// import { spaghetti } from "../components/images";
-
-// // Sample ingredient data
-// const ingredients = [
-//   { id: 1, name: "Fresh Basil", price: "$2.99", image: spaghetti },
-//   { id: 2, name: "Cherry Tomatoes", price: "$3.49", image: spaghetti },
-//   { id: 3, name: "Mozzarella Cheese", price: "$4.99", image: spaghetti },
-//   { id: 4, name: "Olive Oil", price: "$5.99", image: spaghetti },
-//   { id: 5, name: "Garlic Cloves", price: "$1.99", image: spaghetti },
-//   { id: 6, name: "Pasta", price: "$3.99", image: spaghetti },
-// ];
-
-// const ShopPage: React.FC = () => {
-//   const [searchTerm, setSearchTerm] = useState("");
-
-//   // Filtering ingredients based on search input
-//   const filteredIngredients = ingredients.filter((ingredient) =>
-//     ingredient.name.toLowerCase().includes(searchTerm.toLowerCase())
-//   );
-
-//   return (
-//     <div className="min-h-screen bg-gray-50 py-10 px-6 md:px-20">
-//       {/* Header Section */}
-//       <div className="relative w-full h-[40vh] flex items-center justify-center text-center bg-cover bg-center"
-//         style={{ backgroundImage: "url('/images/shop-banner.jpg')" }}>
-//         <div className="absolute inset-0 bg-black/60"></div>
-//         <div className="relative z-10 px-5 md:px-20">
-//           <Typography variant="h4" className="text-white font-bold">
-//             Shop for Fresh Ingredients
-//           </Typography>
-//         </div>
-//       </div>
-
-//       {/* Search Bar */}
-//       <div className="mt-10 flex justify-center">
-//         <TextField
-//           variant="outlined"
-//           placeholder="Search Ingredients..."
-//           fullWidth
-//           className="max-w-md"
-//           onChange={(e) => setSearchTerm(e.target.value)}
-//         />
-//       </div>
-
-//       {/* Ingredients Grid */}
-//       <Grid container spacing={4} className="mt-8">
-//         {filteredIngredients.length > 0 ? (
-//           filteredIngredients.map((ingredient) => (
-//             <Grid item xs={12} sm={6} md={4} key={ingredient.id}>
-//               <motion.div whileHover={{ scale: 1.05 }} transition={{ duration: 0.3 }}>
-//                 <Card className="shadow-lg rounded-lg overflow-hidden">
-//                   <CardMedia
-//                     component="img"
-//                     height="200"
-//                     image={ingredient.image}
-//                     alt={ingredient.name}
-//                   />
-//                   <CardContent>
-//                     <Typography variant="h6" className="font-bold text-gray-800">
-//                       {ingredient.name}
-//                     </Typography>
-//                     <Typography variant="body2" className="text-gray-600">
-//                       {ingredient.price}
-//                     </Typography>
-//                     <Button
-//                       variant="contained"
-//                       sx={{ backgroundColor: "#d97706", color: "white", marginTop: "10px" }}
-//                       fullWidth
-//                     >
-//                       Add to Cart
-//                     </Button>
-//                   </CardContent>
-//                 </Card>
-//               </motion.div>
-//             </Grid>
-//           ))
-//         ) : (
-//           <Typography variant="h6" className="text-center text-gray-600 w-full mt-10">
-//             No ingredients found.
-//           </Typography>
-//         )}
-//       </Grid>
-//     </div>
-//   );
-// };
-
-// export default ShopPage;
-
-
-
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import { 
   Search, 
   ShoppingCart, 
   FilterList, 
-  Close, 
-  Star, 
-  StarHalf,
-  AddShoppingCart,
-  FavoriteBorder,
-  Favorite
+  Close,
+  Kitchen,
+  LocalDining,
+  Storefront
 } from '@mui/icons-material';
 import { 
   TextField, 
   InputAdornment, 
   Slider, 
-  Checkbox, 
-  FormControlLabel,
   Badge,
   Drawer,
   IconButton,
   Chip,
-  Button
+  Button,
+  CircularProgress,
+  Alert,
+  Tabs,
+  Tab,
+  Box
 } from '@mui/material';
+import ProductCard from '../components/ProductComponent';
+import { Pagination } from '../components/Pagination';
+import { Product, ApiResponse } from '../types/Products';
 
-// Sample image placeholder
-const sampleImage = "/api/placeholder/300/300";
+// Section types
+type SectionType = 'products' | 'ingredients' | 'platform-ingredients';
 
-// Sample ingredient data
-const ingredientsData = [
+interface SectionConfig {
+  id: SectionType;
+  label: string;
+  icon: React.ReactNode;
+  endpoint: string;
+  maxPrice: number;
+  color: string;
+  description: string;
+}
+
+const SECTIONS: SectionConfig[] = [
   {
-    id: 1,
-    name: "Organic Basil",
-    category: "Herbs",
-    imageUrl: sampleImage,
-    price: 3.99,
-    unit: "bunch",
-    rating: 4.7,
-    reviewCount: 128,
-    isFeatured: true,
-    isOrganic: true,
-    stock: 45,
-    tags: ["Fresh", "Organic", "Local"],
-    discountPercent: 0
+    id: 'products',
+    label: 'Kitchen Utensils',
+    icon: <Kitchen />,
+    endpoint: 'products',
+    maxPrice: 100,
+    color: 'amber',
+    description: 'Professional kitchen tools and utensils from Amazon'
   },
   {
-    id: 2,
-    name: "Premium Olive Oil",
-    category: "Oils",
-    imageUrl: sampleImage,
-    price: 18.50,
-    unit: "bottle",
-    rating: 4.9,
-    reviewCount: 203,
-    isFeatured: true,
-    isOrganic: true,
-    stock: 32,
-    tags: ["Imported", "Gourmet"],
-    discountPercent: 10
+    id: 'ingredients',
+    label: 'African Ingredients',
+    icon: <LocalDining />,
+    endpoint: 'ingredients',
+    maxPrice: 50,
+    color: 'green',
+    description: 'Authentic African spices and seasonings'
   },
   {
-    id: 3,
-    name: "Himalayan Pink Salt",
-    category: "Spices",
-    imageUrl: sampleImage,
-    price: 6.75,
-    unit: "jar",
-    rating: 4.5,
-    reviewCount: 76,
-    isFeatured: false,
-    isOrganic: false,
-    stock: 89,
-    tags: ["Mineral-rich", "Premium"],
-    discountPercent: 0
-  },
-  {
-    id: 4,
-    name: "Fresh Avocados",
-    category: "Produce",
-    imageUrl: sampleImage,
-    price: 1.99,
-    unit: "each",
-    rating: 4.3,
-    reviewCount: 182,
-    isFeatured: true,
-    isOrganic: true,
-    stock: 15,
-    tags: ["Fresh", "Ripe"],
-    discountPercent: 0
-  },
-  {
-    id: 5,
-    name: "Artisanal Sourdough",
-    category: "Bakery",
-    imageUrl: sampleImage,
-    price: 5.50,
-    unit: "loaf",
-    rating: 4.8,
-    reviewCount: 156,
-    isFeatured: true,
-    isOrganic: false,
-    stock: 8,
-    tags: ["Freshly Baked", "Artisanal"],
-    discountPercent: 0
-  },
-  {
-    id: 6,
-    name: "Free-Range Eggs",
-    category: "Dairy & Eggs",
-    imageUrl: sampleImage,
-    price: 4.99,
-    unit: "dozen",
-    rating: 4.6,
-    reviewCount: 89,
-    isFeatured: false,
-    isOrganic: true,
-    stock: 24,
-    tags: ["Free-Range", "Organic"],
-    discountPercent: 0
-  },
-  {
-    id: 7,
-    name: "Aged Balsamic Vinegar",
-    category: "Condiments",
-    imageUrl: sampleImage,
-    price: 12.99,
-    unit: "bottle",
-    rating: 4.9,
-    reviewCount: 67,
-    isFeatured: true,
-    isOrganic: false,
-    stock: 19,
-    tags: ["Imported", "Aged"],
-    discountPercent: 15
-  },
-  {
-    id: 8,
-    name: "Grass-Fed Ground Beef",
-    category: "Meat",
-    imageUrl: sampleImage,
-    price: 8.99,
-    unit: "lb",
-    rating: 4.5,
-    reviewCount: 112,
-    isFeatured: false,
-    isOrganic: true,
-    stock: 22,
-    tags: ["Grass-Fed", "Sustainable"],
-    discountPercent: 0
-  },
-  {
-    id: 9,
-    name: "Wild-Caught Salmon",
-    category: "Seafood",
-    imageUrl: sampleImage,
-    price: 14.99,
-    unit: "fillet",
-    rating: 4.7,
-    reviewCount: 93,
-    isFeatured: true,
-    isOrganic: false,
-    stock: 13,
-    tags: ["Wild-Caught", "Sustainable"],
-    discountPercent: 0
-  },
-  {
-    id: 10,
-    name: "Organic Quinoa",
-    category: "Grains",
-    imageUrl: sampleImage,
-    price: 5.99,
-    unit: "lb",
-    rating: 4.4,
-    reviewCount: 145,
-    isFeatured: false,
-    isOrganic: true,
-    stock: 56,
-    tags: ["Organic", "Gluten-Free"],
-    discountPercent: 5
-  },
-  {
-    id: 11,
-    name: "Shallots",
-    category: "Produce",
-    imageUrl: sampleImage,
-    price: 2.49,
-    unit: "lb",
-    rating: 4.2,
-    reviewCount: 78,
-    isFeatured: false,
-    isOrganic: false,
-    stock: 32,
-    tags: ["Fresh"],
-    discountPercent: 0
-  },
-  {
-    id: 12,
-    name: "Vanilla Bean Pods",
-    category: "Baking",
-    imageUrl: sampleImage,
-    price: 8.99,
-    unit: "pack",
-    rating: 4.9,
-    reviewCount: 62,
-    isFeatured: true,
-    isOrganic: true,
-    stock: 19,
-    tags: ["Gourmet", "Organic"],
-    discountPercent: 0
+    id: 'platform-ingredients',
+    label: 'Platform Ingredients',
+    icon: <Storefront />,
+    endpoint: 'platform-ingredients',
+    maxPrice: 75,
+    color: 'blue',
+    description: 'Curated ingredients from our platform'
   }
 ];
 
-// Categories with icons would be defined here
-const categories = [
-  { id: "All", name: "All Categories" },
-  { id: "Produce", name: "Produce" },
-  { id: "Herbs", name: "Herbs & Spices" },
-  { id: "Oils", name: "Oils & Vinegars" },
-  { id: "Bakery", name: "Bakery" },
-  { id: "Dairy & Eggs", name: "Dairy & Eggs" },
-  { id: "Meat", name: "Meat" },
-  { id: "Seafood", name: "Seafood" },
-  { id: "Grains", name: "Grains & Pasta" },
-  { id: "Baking", name: "Baking Supplies" },
-  { id: "Condiments", name: "Condiments" },
-];
-
-// Ingredient Card Component
-const IngredientCard: React.FC<{ item: any }> = ({ item }) => {
-  const [isInCart, setIsInCart] = useState(false);
-  const [isFavorite, setIsFavorite] = useState(false);
-
-  // Calculate discounted price if applicable
-  const finalPrice = item.discountPercent > 0 
-    ? (item.price - (item.price * item.discountPercent / 100)).toFixed(2) 
-    : item.price.toFixed(2);
-  
-  return (
-    <motion.div 
-      className="bg-white rounded-lg overflow-hidden shadow-md hover:shadow-xl transition-shadow duration-300"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      whileHover={{ y: -5, transition: { duration: 0.2 } }}
-    >
-      <div className="relative">
-        {/* Product image */}
-        <img 
-          src={item.imageUrl} 
-          alt={item.name} 
-          className="w-full h-48 object-cover"
-        />
-        
-        {/* Discount badge */}
-        {item.discountPercent > 0 && (
-          <div className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-md">
-            {item.discountPercent}% OFF
-          </div>
-        )}
-        
-        {/* Favorite button */}
-        <button 
-          className="absolute top-2 right-2 bg-white p-1 rounded-full shadow-md"
-          onClick={() => setIsFavorite(!isFavorite)}
-        >
-          {isFavorite ? (
-            <Favorite className="text-red-500" fontSize="small" />
-          ) : (
-            <FavoriteBorder className="text-gray-500" fontSize="small" />
-          )}
-        </button>
-        
-        {/* Organic badge */}
-        {item.isOrganic && (
-          <div className="absolute bottom-2 left-2 bg-green-500 text-white text-xs font-bold px-2 py-1 rounded-md">
-            ORGANIC
-          </div>
-        )}
-        
-        {/* Stock indicator for low stock */}
-        {item.stock < 20 && (
-          <div className="absolute bottom-2 right-2 bg-amber-600 text-white text-xs font-bold px-2 py-1 rounded-md">
-            Only {item.stock} left
-          </div>
-        )}
-      </div>
-      
-      <div className="p-4">
-        <div className="flex justify-between items-start">
-          <div>
-            <h3 className="font-semibold text-gray-800 text-lg mb-1">{item.name}</h3>
-            <p className="text-sm text-gray-500 mb-2">{item.category}</p>
-          </div>
-        </div>
-        
-        {/* Rating */}
-        <div className="flex items-center mb-3">
-          <div className="flex text-amber-500">
-            {[...Array(5)].map((_, i) => {
-              if (i < Math.floor(item.rating)) 
-                return <Star key={i} fontSize="small" />;
-              else if (i < Math.ceil(item.rating)) 
-                return <StarHalf key={i} fontSize="small" />;
-              return null;
-            })}
-          </div>
-          <span className="text-xs text-gray-500 ml-1">({item.reviewCount})</span>
-        </div>
-        
-        {/* Tags */}
-        <div className="flex flex-wrap gap-1 mb-3">
-          {item.tags.map(tag => (
-            <span key={tag} className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
-              {tag}
-            </span>
-          ))}
-        </div>
-        
-        {/* Price and Add to Cart */}
-        <div className="flex justify-between items-center mt-4">
-          <div className="flex items-end">
-            {item.discountPercent > 0 && (
-              <span className="text-gray-400 line-through mr-2 text-sm">${item.price.toFixed(2)}</span>
-            )}
-            <span className="font-bold text-xl text-gray-800">${finalPrice}</span>
-            <span className="text-gray-500 text-sm ml-1">/{item.unit}</span>
-          </div>
-          
-          <motion.button
-            className={`p-2 rounded-full flex items-center justify-center 
-              ${isInCart ? 'bg-green-50 border border-green-500 text-green-600' : 'bg-amber-600 text-white'}`}
-            onClick={() => setIsInCart(!isInCart)}
-            whileTap={{ scale: 0.9 }}
-          >
-            {isInCart ? (
-              <Check className="h-5 w-5" />
-            ) : (
-              <AddShoppingCart className="h-5 w-5" />
-            )}
-          </motion.button>
-        </div>
-      </div>
-    </motion.div>
-  );
-};
-
-// Check icon component
-const Check = (props: { className?: string }) => (
-  <svg 
-    xmlns="http://www.w3.org/2000/svg" 
-    className={props.className} 
-    viewBox="0 0 20 20" 
-    fill="currentColor"
-  >
-    <path 
-      fillRule="evenodd" 
-      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" 
-      clipRule="evenodd" 
-    />
-  </svg>
-);
-
-// Main Shop Page Component
 const ShopPage: React.FC = () => {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [activeCategory, setActiveCategory] = useState("All");
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 20]);
-  const [showOrganic, setShowOrganic] = useState(false);
-  const [showDiscount, setShowDiscount] = useState(false);
-  const [showInStock, setShowInStock] = useState(true);
-  const [sortBy, setSortBy] = useState("featured");
-  const [filteredItems, setFilteredItems] = useState(ingredientsData);
+  // Current section state
+  const [activeSection, setActiveSection] = useState<SectionType>('products');
+  const currentSectionConfig = SECTIONS.find(s => s.id === activeSection)!;
+  
+  // State management for each section
+  const [sectionsData, setSectionsData] = useState<Record<SectionType, {
+    items: Product[];
+    loading: boolean;
+    error: string | null;
+    currentPage: number;
+    totalCount: number;
+    hasNext: boolean;
+    hasPrevious: boolean;
+  }>>({
+    'products': {
+      items: [],
+      loading: true,
+      error: null,
+      currentPage: 1,
+      totalCount: 0,
+      hasNext: false,
+      hasPrevious: false
+    },
+    'ingredients': {
+      items: [],
+      loading: true,
+      error: null,
+      currentPage: 1,
+      totalCount: 0,
+      hasNext: false,
+      hasPrevious: false
+    },
+    'platform-ingredients': {
+      items: [],
+      loading: true,
+      error: null,
+      currentPage: 1,
+      totalCount: 0,
+      hasNext: false,
+      hasPrevious: false
+    }
+  });
+
+  // Filter states - separate for each section
+  const [sectionFilters, setSectionFilters] = useState<Record<SectionType, {
+    searchQuery: string;
+    priceRange: [number, number];
+    sortBy: string;
+  }>>({
+    'products': {
+      searchQuery: "",
+      priceRange: [0, 100],
+      sortBy: "newest"
+    },
+    'ingredients': {
+      searchQuery: "",
+      priceRange: [0, 50],
+      sortBy: "newest"
+    },
+    'platform-ingredients': {
+      searchQuery: "",
+      priceRange: [0, 75],
+      sortBy: "newest"
+    }
+  });
+
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
-  const [cartItems, setCartItems] = useState<number>(0);
   const [showFilterButtons, setShowFilterButtons] = useState(window.innerWidth >= 768);
+  
+  // Derived state for current section
+  const currentData = sectionsData[activeSection];
+  const currentFilters = sectionFilters[activeSection];
+  const itemsPerPage = 20;
+  const totalPages = Math.ceil(currentData.totalCount / itemsPerPage);
 
   // Handle window resize for responsive design
   useEffect(() => {
@@ -478,84 +156,174 @@ const ShopPage: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Apply all filters
-  useEffect(() => {
-    let result = [...ingredientsData];
+  // API fetch function
+  const fetchSectionData = async (
+    section: SectionType, 
+    page: number = 1, 
+    search: string = "", 
+    minPrice?: number, 
+    maxPrice?: number
+  ) => {
+    const sectionConfig = SECTIONS.find(s => s.id === section)!;
     
-    // Category filter
-    if (activeCategory !== "All") {
-      result = result.filter(item => item.category === activeCategory);
+    try {
+      setSectionsData(prev => ({
+        ...prev,
+        [section]: { ...prev[section], loading: true, error: null }
+      }));
+      
+      const params = new URLSearchParams();
+      params.append('page', page.toString());
+      
+      if (search.trim()) {
+        params.append('search', search.trim());
+      }
+      
+      if (minPrice !== undefined && minPrice > 0) {
+        params.append('min_price', minPrice.toString());
+      }
+      
+      if (maxPrice !== undefined && maxPrice < sectionConfig.maxPrice) {
+        params.append('max_price', maxPrice.toString());
+      }
+      
+      const response = await fetch(`http://127.0.0.1:8000/api/shop/${sectionConfig.endpoint}/?${params.toString()}`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch ${sectionConfig.label.toLowerCase()}: ${response.statusText}`);
+      }
+      
+      const data: ApiResponse = await response.json();
+      
+      setSectionsData(prev => ({
+        ...prev,
+        [section]: {
+          ...prev[section],
+          items: data.results,
+          totalCount: data.count,
+          hasNext: !!data.next,
+          hasPrevious: !!data.previous,
+          loading: false
+        }
+      }));
+      
+    } catch (err) {
+      console.error(`Error fetching ${section}:`, err);
+      setSectionsData(prev => ({
+        ...prev,
+        [section]: {
+          ...prev[section],
+          error: err instanceof Error ? err.message : 'An error occurred',
+          items: [],
+          loading: false
+        }
+      }));
     }
-    
-    // Price range filter
-    result = result.filter(
-      item => item.price >= priceRange[0] && item.price <= priceRange[1]
-    );
-    
-    // Organic filter
-    if (showOrganic) {
-      result = result.filter(item => item.isOrganic);
-    }
-    
-    // Discount filter
-    if (showDiscount) {
-      result = result.filter(item => item.discountPercent > 0);
-    }
-    
-    // In stock filter
-    if (showInStock) {
-      result = result.filter(item => item.stock > 0);
-    }
-    
-    // Search query filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(
-        item => 
-          item.name.toLowerCase().includes(query) || 
-          item.category.toLowerCase().includes(query) ||
-          item.tags.some(tag => tag.toLowerCase().includes(query))
-      );
-    }
-    
-    // Sort
-    switch (sortBy) {
-      case "price-asc":
-        result.sort((a, b) => a.price - b.price);
-        break;
-      case "price-desc":
-        result.sort((a, b) => b.price - a.price);
-        break;
-      case "rating":
-        result.sort((a, b) => b.rating - a.rating);
-        break;
-      case "featured":
-      default:
-        result.sort((a, b) => (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0));
-        break;
-    }
-    
-    setFilteredItems(result);
-  }, [
-    activeCategory,
-    priceRange,
-    showOrganic,
-    showDiscount,
-    showInStock,
-    searchQuery,
-    sortBy
-  ]);
-  
-  // Reset filters
-  const resetFilters = () => {
-    setActiveCategory("All");
-    setPriceRange([0, 20]);
-    setShowOrganic(false);
-    setShowDiscount(false);
-    setShowInStock(true);
-    setSortBy("featured");
   };
-  
+
+  // Initial load for all sections
+  useEffect(() => {
+    SECTIONS.forEach(section => {
+      fetchSectionData(section.id);
+    });
+  }, []);
+
+  // Handle search and filters for current section with debouncing
+  useEffect(() => {
+    const debounceTimer = setTimeout(() => {
+      // Reset to page 1 when filters change
+      setSectionsData(prev => ({
+        ...prev,
+        [activeSection]: { ...prev[activeSection], currentPage: 1 }
+      }));
+      
+      fetchSectionData(
+        activeSection,
+        1, 
+        currentFilters.searchQuery, 
+        currentFilters.priceRange[0], 
+        currentFilters.priceRange[1]
+      );
+    }, 500);
+
+    return () => clearTimeout(debounceTimer);
+  }, [currentFilters.searchQuery, currentFilters.priceRange, activeSection]);
+
+  // Handle page changes
+  const handlePageChange = (page: number) => {
+    setSectionsData(prev => ({
+      ...prev,
+      [activeSection]: { ...prev[activeSection], currentPage: page }
+    }));
+    
+    fetchSectionData(
+      activeSection, 
+      page, 
+      currentFilters.searchQuery, 
+      currentFilters.priceRange[0], 
+      currentFilters.priceRange[1]
+    );
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Handle section change
+  const handleSectionChange = (event: React.SyntheticEvent, newSection: SectionType) => {
+    setActiveSection(newSection);
+  };
+
+  // Update filters for current section
+  const updateCurrentSectionFilter = (key: keyof typeof currentFilters, value: unknown) => {
+    setSectionFilters(prev => ({
+      ...prev,
+      [activeSection]: {
+        ...prev[activeSection],
+        [key]: value
+      }
+    }));
+  };
+
+  // Apply client-side sorting
+  const sortedItems = [...currentData.items].sort((a, b) => {
+    switch (currentFilters.sortBy) {
+      case "price-asc":
+        return parseFloat(a.price) - parseFloat(b.price);
+      case "price-desc":
+        return parseFloat(b.price) - parseFloat(a.price);
+      case "name":
+        return a.name.localeCompare(b.name);
+      case "newest":
+      default:
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    }
+  });
+
+  // Reset filters for current section
+  const resetFilters = () => {
+    setSectionFilters(prev => ({
+      ...prev,
+      [activeSection]: {
+        searchQuery: "",
+        priceRange: [0, currentSectionConfig.maxPrice],
+        sortBy: "newest"
+      }
+    }));
+    setSectionsData(prev => ({
+      ...prev,
+      [activeSection]: { ...prev[activeSection], currentPage: 1 }
+    }));
+    fetchSectionData(activeSection);
+  };
+
+  // Get color classes based on current section
+  const getColorClasses = (type: 'bg' | 'text' | 'border' | 'hover') => {
+    const colorMap = {
+      amber: { bg: 'bg-amber-600', text: 'text-amber-600', border: 'border-amber-600', hover: 'hover:bg-amber-700' },
+      green: { bg: 'bg-green-600', text: 'text-green-600', border: 'border-green-600', hover: 'hover:bg-green-700' },
+      blue: { bg: 'bg-blue-600', text: 'text-blue-600', border: 'border-blue-600', hover: 'hover:bg-blue-700' }
+    };
+    return colorMap[currentSectionConfig.color as keyof typeof colorMap][type];
+  };
+
   // Filter drawer (for mobile)
   const filterDrawer = (
     <Drawer
@@ -571,72 +339,22 @@ const ShopPage: React.FC = () => {
           </IconButton>
         </div>
         
-        {/* Mobile Category Select */}
-        <div className="mb-6">
-          <h3 className="font-medium mb-2">Category</h3>
-          <select 
-            className="w-full p-2 border border-gray-300 rounded-md"
-            value={activeCategory}
-            onChange={(e) => setActiveCategory(e.target.value)}
-          >
-            {categories.map(cat => (
-              <option key={cat.id} value={cat.id}>
-                {cat.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        
         {/* Price Range */}
         <div className="mb-6">
           <h3 className="font-medium mb-3">Price Range</h3>
           <Slider
-            value={priceRange}
-            onChange={(_, newValue) => setPriceRange(newValue as [number, number])}
+            value={currentFilters.priceRange}
+            onChange={(_, newValue) => updateCurrentSectionFilter('priceRange', newValue as [number, number])}
             valueLabelDisplay="auto"
             min={0}
-            max={20}
-            step={0.5}
-            className="text-amber-600"
+            max={currentSectionConfig.maxPrice}
+            step={1}
+            className={getColorClasses('text')}
           />
           <div className="flex justify-between mt-1">
-            <span className="text-sm text-gray-500">${priceRange[0]}</span>
-            <span className="text-sm text-gray-500">${priceRange[1]}</span>
+            <span className="text-sm text-gray-500">${currentFilters.priceRange[0]}</span>
+            <span className="text-sm text-gray-500">${currentFilters.priceRange[1]}</span>
           </div>
-        </div>
-        
-        {/* Other filters */}
-        <div className="mb-6 space-y-2">
-          <FormControlLabel
-            control={
-              <Checkbox 
-                checked={showOrganic} 
-                onChange={(e) => setShowOrganic(e.target.checked)}
-                className="text-amber-600"
-              />
-            }
-            label="Organic Only"
-          />
-          <FormControlLabel
-            control={
-              <Checkbox 
-                checked={showDiscount} 
-                onChange={(e) => setShowDiscount(e.target.checked)}
-                className="text-amber-600"
-              />
-            }
-            label="On Sale"
-          />
-          <FormControlLabel
-            control={
-              <Checkbox 
-                checked={showInStock} 
-                onChange={(e) => setShowInStock(e.target.checked)}
-                className="text-amber-600"
-              />
-            }
-            label="In Stock"
-          />
         </div>
         
         {/* Sort By */}
@@ -644,13 +362,13 @@ const ShopPage: React.FC = () => {
           <h3 className="font-medium mb-2">Sort By</h3>
           <select 
             className="w-full p-2 border border-gray-300 rounded-md"
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
+            value={currentFilters.sortBy}
+            onChange={(e) => updateCurrentSectionFilter('sortBy', e.target.value)}
           >
-            <option value="featured">Featured</option>
+            <option value="newest">Newest First</option>
             <option value="price-asc">Price: Low to High</option>
             <option value="price-desc">Price: High to Low</option>
-            <option value="rating">Customer Rating</option>
+            <option value="name">Name: A to Z</option>
           </select>
         </div>
         
@@ -668,7 +386,7 @@ const ShopPage: React.FC = () => {
             variant="contained" 
             fullWidth
             onClick={() => setIsFilterDrawerOpen(false)}
-            className="bg-amber-600 hover:bg-amber-700 text-white"
+            className={`${getColorClasses('bg')} ${getColorClasses('hover')} text-white`}
           >
             Apply Filters
           </Button>
@@ -676,31 +394,50 @@ const ShopPage: React.FC = () => {
       </div>
     </Drawer>
   );
-  
-  return (
+
+  const content = (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-amber-600 text-white py-6">
+      <div className={`${getColorClasses('bg')} text-white py-6`}>
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold mb-1">Ingredients Shop</h1>
-              <p className="text-amber-100">
-                Find the perfect ingredients for your recipes
+              <h1 className="text-3xl font-bold mb-1">Multi-Platform Shop</h1>
+              <p className="opacity-90">
+                {currentSectionConfig.description}
               </p>
             </div>
             <div className="flex items-center">
-              <Badge badgeContent={cartItems} color="error">
-                <motion.button
-                  className="bg-amber-700 hover:bg-amber-800 p-3 rounded-full flex items-center"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
+              <Badge badgeContent={0} color="error">
+                <button className={`${getColorClasses('bg').replace('600', '700')} ${getColorClasses('hover').replace('700', '800')} p-3 rounded-full flex items-center transition-colors`}>
                   <ShoppingCart />
-                </motion.button>
+                </button>
               </Badge>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Section Tabs */}
+      <div className="bg-white shadow-sm">
+        <div className="max-w-7xl mx-auto px-4">
+          <Tabs
+            value={activeSection}
+            onChange={handleSectionChange}
+            className="border-b border-gray-200"
+            indicatorColor="primary"
+            textColor="primary"
+          >
+            {SECTIONS.map((section) => (
+              <Tab
+                key={section.id}
+                value={section.id}
+                icon={section.icon as React.ReactElement}
+                label={section.label}
+                className="flex-row gap-2 min-h-16"
+              />
+            ))}
+          </Tabs>
         </div>
       </div>
       
@@ -712,15 +449,15 @@ const ShopPage: React.FC = () => {
             <div className="flex-grow">
               <TextField
                 fullWidth
-                placeholder="Search ingredients, categories, or tags..."
+                placeholder={`Search ${currentSectionConfig.label.toLowerCase()}...`}
                 variant="outlined"
                 size="small"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={currentFilters.searchQuery}
+                onChange={(e) => updateCurrentSectionFilter('searchQuery', e.target.value)}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <Search className="text-amber-600" />
+                      <Search className={getColorClasses('text')} />
                     </InputAdornment>
                   ),
                   className: "rounded-full",
@@ -728,32 +465,30 @@ const ShopPage: React.FC = () => {
               />
             </div>
             
-            {/* Sort dropdown (always visible) */}
+            {/* Sort dropdown */}
             <div className="min-w-[180px]">
               <select 
                 className="w-full p-2 border border-gray-200 rounded-full bg-white text-gray-800"
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
+                value={currentFilters.sortBy}
+                onChange={(e) => updateCurrentSectionFilter('sortBy', e.target.value)}
               >
-                <option value="featured">Featured</option>
+                <option value="newest">Newest First</option>
                 <option value="price-asc">Price: Low to High</option>
                 <option value="price-desc">Price: High to Low</option>
-                <option value="rating">Highest Rated</option>
+                <option value="name">Name: A to Z</option>
               </select>
             </div>
             
             {/* Filter button (on mobile) */}
             {!showFilterButtons && (
               <div>
-                <motion.button
-                  className="w-full md:w-auto bg-amber-50 text-amber-800 border border-amber-200 px-4 py-2 rounded-full flex items-center justify-center"
+                <button
+                  className={`w-full md:w-auto bg-${currentSectionConfig.color}-50 ${getColorClasses('text')} ${getColorClasses('border')} px-4 py-2 rounded-full flex items-center justify-center hover:bg-${currentSectionConfig.color}-100 transition-colors`}
                   onClick={() => setIsFilterDrawerOpen(true)}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
                 >
                   <FilterList className="mr-1" />
                   Filters
-                </motion.button>
+                </button>
               </div>
             )}
           </div>
@@ -765,181 +500,149 @@ const ShopPage: React.FC = () => {
         <div className="flex flex-col md:flex-row gap-8">
           {/* Filter sidebar (on desktop) */}
           {showFilterButtons && (
-            <motion.div 
-              className="md:w-1/4 lg:w-1/5"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-            >
+            <div className="md:w-1/4 lg:w-1/5">
               <div className="bg-white rounded-lg shadow-md p-4">
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-lg font-semibold">Filters</h2>
                   <button 
-                    className="text-amber-600 text-sm hover:underline"
+                    className={`${getColorClasses('text')} text-sm hover:underline`}
                     onClick={resetFilters}
                   >
                     Reset All
                   </button>
                 </div>
                 
-                {/* Categories */}
-                <div className="mb-6">
-                  <h3 className="font-medium mb-3 text-gray-700">Categories</h3>
-                  <div className="space-y-2">
-                    {categories.map(category => (
-                      <motion.button
-                        key={category.id}
-                        className={`block w-full text-left px-3 py-2 rounded-md text-sm ${
-                          activeCategory === category.id
-                            ? 'bg-amber-100 text-amber-800 font-medium'
-                            : 'hover:bg-gray-100 text-gray-700'
-                        }`}
-                        onClick={() => setActiveCategory(category.id)}
-                        whileHover={{ x: 4 }}
-                        whileTap={{ scale: 0.98 }}
-                      >
-                        {category.name}
-                      </motion.button>
-                    ))}
-                  </div>
-                </div>
-                
                 {/* Price Range */}
                 <div className="mb-6">
                   <h3 className="font-medium mb-3 text-gray-700">Price Range</h3>
                   <Slider
-                    value={priceRange}
-                    onChange={(_, newValue) => setPriceRange(newValue as [number, number])}
+                    value={currentFilters.priceRange}
+                    onChange={(_, newValue) => updateCurrentSectionFilter('priceRange', newValue as [number, number])}
                     valueLabelDisplay="auto"
                     min={0}
-                    max={20}
-                    step={0.5}
-                    className="text-amber-600"
+                    max={currentSectionConfig.maxPrice}
+                    step={1}
+                    className={getColorClasses('text')}
                   />
                   <div className="flex justify-between mt-1">
-                    <span className="text-sm text-gray-500">${priceRange[0]}</span>
-                    <span className="text-sm text-gray-500">${priceRange[1]}</span>
+                    <span className="text-sm text-gray-500">${currentFilters.priceRange[0]}</span>
+                    <span className="text-sm text-gray-500">${currentFilters.priceRange[1]}</span>
                   </div>
                 </div>
                 
-                {/* Other filters */}
-                <div className="mb-6 space-y-2">
-                  <FormControlLabel
-                    control={
-                      <Checkbox 
-                        checked={showOrganic} 
-                        onChange={(e) => setShowOrganic(e.target.checked)}
-                        className="text-amber-600"
-                      />
-                    }
-                    label="Organic Only"
-                  />
-                  <FormControlLabel
-                    control={
-                      <Checkbox 
-                        checked={showDiscount} 
-                        onChange={(e) => setShowDiscount(e.target.checked)}
-                        className="text-amber-600"
-                      />
-                    }
-                    label="On Sale"
-                  />
-                  <FormControlLabel
-                    control={
-                      <Checkbox 
-                        checked={showInStock} 
-                        onChange={(e) => setShowInStock(e.target.checked)}
-                        className="text-amber-600"
-                      />
-                    }
-                    label="In Stock"
-                  />
-                </div>
-                
                 {/* Active filters */}
-                {(activeCategory !== "All" || showOrganic || showDiscount || !showInStock) && (
+                {(currentFilters.searchQuery || currentFilters.priceRange[0] > 0 || currentFilters.priceRange[1] < currentSectionConfig.maxPrice) && (
                   <div className="mt-6">
                     <h3 className="font-medium mb-3 text-gray-700">Active Filters</h3>
                     <div className="flex flex-wrap gap-2">
-                      {activeCategory !== "All" && (
+                      {currentFilters.searchQuery && (
                         <Chip 
-                          label={`Category: ${activeCategory}`}
-                          onDelete={() => setActiveCategory("All")}
+                          label={`Search: ${currentFilters.searchQuery}`}
+                          onDelete={() => updateCurrentSectionFilter('searchQuery', "")}
                           size="small"
-                          className="bg-amber-50 text-amber-800"
+                          className={`bg-${currentSectionConfig.color}-50 ${getColorClasses('text')}`}
                         />
                       )}
-                      {showOrganic && (
+                      {(currentFilters.priceRange[0] > 0 || currentFilters.priceRange[1] < currentSectionConfig.maxPrice) && (
                         <Chip 
-                          label="Organic Only"
-                          onDelete={() => setShowOrganic(false)}
+                          label={`$${currentFilters.priceRange[0]} - $${currentFilters.priceRange[1]}`}
+                          onDelete={() => updateCurrentSectionFilter('priceRange', [0, currentSectionConfig.maxPrice])}
                           size="small"
-                          className="bg-amber-50 text-amber-800"
-                        />
-                      )}
-                      {showDiscount && (
-                        <Chip 
-                          label="On Sale"
-                          onDelete={() => setShowDiscount(false)}
-                          size="small"
-                          className="bg-amber-50 text-amber-800"
-                        />
-                      )}
-                      {!showInStock && (
-                        <Chip 
-                          label="Include Out of Stock"
-                          onDelete={() => setShowInStock(true)}
-                          size="small"
-                          className="bg-amber-50 text-amber-800"
+                          className={`bg-${currentSectionConfig.color}-50 ${getColorClasses('text')}`}
                         />
                       )}
                     </div>
                   </div>
                 )}
               </div>
-            </motion.div>
+            </div>
           )}
           
           {/* Products Grid */}
           <div className={`${showFilterButtons ? 'md:w-3/4 lg:w-4/5' : 'w-full'}`}>
-            {/* Results count and applied filters */}
+            {/* Results count */}
             <div className="flex flex-wrap items-center justify-between mb-6">
               <h2 className="text-gray-700 text-lg">
-                <span className="font-semibold">{filteredItems.length}</span> {filteredItems.length === 1 ? 'product' : 'products'} found
+                <span className="font-semibold">{currentData.totalCount}</span> {currentSectionConfig.label.toLowerCase()} found
+                {currentData.currentPage > 1 && (
+                  <span className="text-gray-500 ml-2">
+                    (Page {currentData.currentPage} of {totalPages})
+                  </span>
+                )}
               </h2>
-              
-              {/* Quick filter chips - visible on mobile */}
-              {!showFilterButtons && (
-                <div className="flex flex-wrap gap-2 mt-4 w-full">
-                  {[
-                    { label: "Organic", isActive: showOrganic, toggle: () => setShowOrganic(!showOrganic) },
-                    { label: "On Sale", isActive: showDiscount, toggle: () => setShowDiscount(!showDiscount) },
-                    { label: "In Stock", isActive: showInStock, toggle: () => setShowInStock(!showInStock) }
-                  ].map((filter) => (
-                    <Chip
-                      key={filter.label}
-                      label={filter.label}
-                      onClick={filter.toggle}
-                      className={filter.isActive ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-700'}
-                    />
-                  ))}
-                </div>
-              )}
             </div>
             
-            {/* No results state */}
-            {filteredItems.length === 0 && (
-              <div className="text-center py-20">
-                <h2 className="text-2xl font-bold text-gray-700">No Products Found</h2>
-                <p className="text-gray-500">Try adjusting your filters or search criteria.</p>
+            {/* Error state */}
+            {currentData.error && (
+              <Alert severity="error" className="mb-6">
+                {currentData.error}
+                <Button onClick={() => fetchSectionData(activeSection, currentData.currentPage)} className="ml-2">
+                  Retry
+                </Button>
+              </Alert>
+            )}
+            
+            {/* Loading state */}
+            {currentData.loading && (
+              <div className="flex justify-center items-center py-20">
+                <CircularProgress className={getColorClasses('text')} />
               </div>
             )}
             
-            {/* Ingredient Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
-              {filteredItems.map(item => (
-                <IngredientCard key={item.id} item={item} />
-              ))}
-            </div>
+            {/* No results state */}
+            {!currentData.loading && !currentData.error && sortedItems.length === 0 && (
+              <div className="text-center py-20">
+                <h2 className="text-2xl font-bold text-gray-700">No {currentSectionConfig.label} Found</h2>
+                <p className="text-gray-500">Try adjusting your search or filters.</p>
+              </div>
+            )}
+            
+            {/* Product Cards */}
+            {!currentData.loading && !currentData.error && sortedItems.length > 0 && (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                  {sortedItems.map(product => {
+                    let buttonTitle = '';
+                    let detailsRoute = '';
+                    
+                    if (activeSection === 'products') {
+                      buttonTitle = 'Purchase from Amazon';
+                      detailsRoute = `/product/${product.id}`;
+                    } else if (activeSection === 'ingredients') {
+                      buttonTitle = 'Purchase from African Food Supermarket';
+                      detailsRoute = `/ingredient/${product.id}`;
+                    } else if (activeSection === 'platform-ingredients') {
+                      buttonTitle = 'Add to Cart';
+                      detailsRoute = `/ingredient/${product.id}`; // Fixed routing to match app.tsx
+                    }
+                    
+                    return (
+                      <div key={product.id} className="flex justify-center">
+                        <ProductCard 
+                          item={product} 
+                          isPlatformIngredient={activeSection === 'platform-ingredients'} 
+                          buttonTitle={buttonTitle}
+                          detailsRoute={detailsRoute}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                {/* Pagination - Now available for ALL sections */}
+                {totalPages > 1 && (
+                  <div className="flex justify-center mt-10">
+                    <Pagination
+                      currentPage={currentData.currentPage}
+                      totalPages={totalPages}
+                      onPageChange={handlePageChange}
+                      hasNext={currentData.hasNext}
+                      hasPrevious={currentData.hasPrevious}
+                    />
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -948,6 +651,10 @@ const ShopPage: React.FC = () => {
       {filterDrawer}
     </div>
   );
+
+  // Remove all layout wrappers (UserDashboardLayout, Navbar, Footer)
+  // Only render the shop content directly
+  return content;
 };
 
 export default ShopPage;

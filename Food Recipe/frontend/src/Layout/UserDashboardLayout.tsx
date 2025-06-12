@@ -173,9 +173,11 @@ const UserDashboardLayout = ({ children, title }) => {
       text: 'Profile',
       path: userId ? `/user-dashboard/user/profile/${userId}` : '/dashboard/user/profile'
     },
-    { icon: <RecommendIcon />, text: 'Recommended for You', path: '/dashboard/user/recommendations' },
+    // { icon: <RecommendIcon />, text: 'Recommended for You', path: '/dashboard/user/recommendations' },
     { icon: <KitchenIcon />, text: 'Ingredient Search', path: '/dashboard/user/ingredient-search' },
     { icon: <CalendarMonthIcon />, text: 'Meal Planner', path: '/dashboard/user/meal-planner' },
+    // Add cart link for platform ingredients
+    { icon: <SmartCookingIcon />, text: 'Ingredient Cart', path: '/dashboard/user/platform-ingredient-cart' },
     { icon: <SettingsIcon />, text: 'Settings', path: '/dashboard/user/settings' },
   ];
   
@@ -533,14 +535,14 @@ const UserDashboardLayout = ({ children, title }) => {
                         <p className="text-xs text-gray-500 truncate">{user?.email || 'user@example.com'}</p>
                       </div>
                       <Link
-                        to={chefProfileId ? `/dashboard/chef/profile/${chefProfileId}` : '/dashboard/chef/profile'}
+                        to={userId ? `/user-dashboard/user/profile/${userId}` : '/dashboard/user/profile'}
                         className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                         onClick={closeAllMenus}
                       >
                         Your Profile
                       </Link>
                       <Link
-                        to="/dashboard/chef/settings"
+                        to="/dashboard/user/settings"
                         className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                         onClick={closeAllMenus}
                       >

@@ -21,6 +21,7 @@ import {
  } from "../components/images";
 import RecipeCard from '../components/RecipeCard';
 import { RecipeData } from '../types/Recipe';
+import { useNavigate } from 'react-router-dom';
 // Sample image imports (replace with your actual imports)
 const sampleImage = "/api/placeholder/300/200";
 
@@ -60,6 +61,7 @@ const ExploreRecipesPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<{ id: string; label: string; icon: React.ReactNode }[]>([]);
 
+  const navigate = useNavigate();
   useEffect(() => {
     const fetchRecipes = async () => {
       setLoading(true);
@@ -98,6 +100,7 @@ const ExploreRecipesPage: React.FC = () => {
           } as RecipeData;
         });
         setAllRecipes(apiRecipes);
+        console.log("Fetched recipes:", apiRecipes);
       } catch {
         setAllRecipes([]);
       } finally {
@@ -329,16 +332,17 @@ const ExploreRecipesPage: React.FC = () => {
               </div>
               
               <div className="space-y-2">
-                {["Vegetarian", "Dessert", "Quick meals", "Protein-rich", "Dairy-free"].map((preference, index) => (
+                {categories.map((category, index) => (
                   <motion.button
-                    key={preference}
+                    key={category.id}
                     className="w-full text-left px-3 py-2 rounded-lg hover:bg-amber-50 text-gray-700 flex justify-between items-center"
                     whileHover={{ x: 5 }}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
+                    onClick={() => navigate(`/category/${category.id}`)}
                     transition={{ duration: 0.3, delay: 0.2 * index + 0.9 }}
                   >
-                    {preference}
+                    {category.label}
                     <KeyboardArrowDown className="text-gray-400" fontSize="small" />
                   </motion.button>
                 ))}

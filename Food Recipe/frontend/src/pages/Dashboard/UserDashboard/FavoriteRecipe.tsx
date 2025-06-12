@@ -12,7 +12,6 @@ import {
   Chip,
   Skeleton,
   useTheme,
-  useMediaQuery,
   Fade,
   Container
 } from '@mui/material';
@@ -28,7 +27,7 @@ import { toast } from 'react-toastify';
 import RecipeCard from '../../../components/RecipeCard';
 import { RecipeData } from '../../../types/Recipe';
 import UserDashboardLayout from '../../../Layout/UserDashboardLayout';
-
+import { useAuth } from '../../../context/AuthContext';
 // API Configuration
 const API_BASE_URL = 'http://localhost:8000';
 const API_ENDPOINTS = {
@@ -70,52 +69,34 @@ interface APIRecipe {
   slug: string;
 }
 
-// Convert API recipe to RecipeData format
-const convertToRecipeData = (apiRecipe: APIRecipe): RecipeData => ({
-  id: apiRecipe.id,
-  title: apiRecipe.title,
-  description: apiRecipe.description,
-  image: apiRecipe.image,
-  category: apiRecipe.category.name,
-  difficulty: apiRecipe.difficulty,
-  cookTime: apiRecipe.preparation_time + apiRecipe.cooking_time,
-  servings: apiRecipe.servings,
-  rating: apiRecipe.average_rating ? parseFloat(apiRecipe.average_rating) : 0,
-  author: {
-    name: apiRecipe.author.username,
-    avatarUrl: apiRecipe.author.profile_image || '',
-    id: apiRecipe.author.id,
-  },
-  createdAt: apiRecipe.created_at,
-  ingredients: [],
-  instructions: [],
-  tags: [],
-  calories: apiRecipe.calories || 0,
-  prepTime: apiRecipe.preparation_time,
-  isFavorited: apiRecipe.is_favorited,
-  isLiked: apiRecipe.is_liked,
-  likeCount: apiRecipe.like_count, // <-- use likeCount, not likesCount
-  ratingsCount: apiRecipe.rating_count,
-  reviewCount: apiRecipe.rating_count,
-});
+// Helper to get category name (handles string or object)
+function getCategoryName(category: { name?: string } | string | null | undefined): string {
+  if (!category) return '';
+  if (typeof category === 'string') return category;
+  if (typeof category === 'object' && category.name) return category.name;
+  return '';
+}
 
 const FavoriteRecipe: React.FC = () => {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
-
   const [favorites, setFavorites] = useState<APIRecipe[]>([]);
   const [filteredFavorites, setFilteredFavorites] = useState<APIRecipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  const { token } = useAuth();
   // Fetch favorites from API
-  const fetchFavorites = async () => {
+  const fetchFavorites = React.useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await axios.get(API_ENDPOINTS.favorites, { withCredentials: true });
+      const res = await axios.get(API_ENDPOINTS.favorites, {
+        withCredentials: true,
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
       console.log('Fetched favorites:', res.data);
       const favoritesData = res.data.results || res.data;
       setFavorites(favoritesData);
@@ -123,17 +104,17 @@ const FavoriteRecipe: React.FC = () => {
     } catch (err) {
       console.error('Failed to fetch favorite recipes:', err);
       setError('Failed to fetch favorite recipes. Please try again.');
-      toast.error('Failed to fetch favorite recipes');
+      // toast.error('Failed to fetch favorite recipes');
       setFavorites([]);
       setFilteredFavorites([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     fetchFavorites();
-  }, []);
+  }, [token, fetchFavorites]);
 
   // Filter favorites based on search term
   useEffect(() => {
@@ -147,26 +128,31 @@ const FavoriteRecipe: React.FC = () => {
 
   // Toggle favorite handler
   const handleToggleFavorite = async (recipeId: number) => {
+    // Optimistically update UI
+    const updatedFavorites = favorites.filter(recipe => recipe.id !== recipeId);
+    setFavorites(updatedFavorites);
+    setFilteredFavorites(updatedFavorites.filter(recipe =>
+      recipe.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      recipe.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      recipe.category.name.toLowerCase().includes(searchTerm.toLowerCase())
+    ));
     try {
       await axios.post(
         API_ENDPOINTS.toggleFavorite(recipeId), 
-        {}, 
+        { headers: { Authorization: `Bearer ${token}` } }, 
         { withCredentials: true }
       );
-      
-      // Remove from favorites list since it's no longer favorited
-      const updatedFavorites = favorites.filter(recipe => recipe.id !== recipeId);
-      setFavorites(updatedFavorites);
-      setFilteredFavorites(updatedFavorites.filter(recipe =>
-        recipe.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        recipe.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        recipe.category.name.toLowerCase().includes(searchTerm.toLowerCase())
-      ));
-      
       toast.success('Recipe removed from favorites!');
     } catch (err) {
-      console.error('Failed to toggle favorite:', err);
-      toast.error('Failed to update favorite');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const error = err as any;
+      if (error.response && error.response.status === 400 && error.response.data && error.response.data.detail && error.response.data.detail.includes('already removed')) {
+        toast.info('Recipe already removed from favorites.');
+      } else if (error.response && error.response.status === 500 && typeof error.response.data === 'string' && error.response.data.includes('does not exist')) {
+        toast.info('Recipe already removed from favorites.');
+      } else {
+        toast.error('Failed to update favorite');
+      }
     }
   };
 
@@ -488,11 +474,32 @@ const FavoriteRecipe: React.FC = () => {
                 <Fade in={!loading} timeout={300 + index * 100}>
                   <div>
                     <RecipeCard
-                      recipe={convertToRecipeData(recipe)}
-                      onToggleFavorite={() => handleToggleFavorite(recipe.id)}
-                      showFavoriteButton={true}
-                      dashboardMode={false}
-                    />
+                        recipe={{
+                          id: recipe.id,
+                          title: recipe.title,
+                          category: getCategoryName(recipe.category),
+                          imageUrl: recipe.image,
+                          cookTime: recipe.preparation_time + recipe.cooking_time,
+                          difficulty: '', // Map if available
+                          rating: recipe.average_rating,
+                          reviewCount: 0, // Map if available
+                          author: {
+                            name: recipe.author.username,
+                            avatarUrl: '', // Map if available
+                          },
+                          isSaved: false,
+                          isLiked: false,
+                          likeCount: 0,
+                        }}
+                        dashboardType="user"
+                        // Remove onEdit/onDelete for user dashboard
+                        isFavorited={recipe.is_favorited}
+                        onToggleFavorite={() => handleToggleFavorite(recipe.id)}
+                        onToggleLike={() => handleToggleLike(recipe.id)}
+                        isLiked={recipe.is_liked}
+                        showFavoriteButton={true}
+                        likeCount={recipe.likeCount}
+                      />
                   </div>
                 </Fade>
               </Grid>

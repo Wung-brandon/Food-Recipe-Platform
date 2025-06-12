@@ -16,6 +16,7 @@ interface RecipeCardProps {
   onToggleFavorite?: () => void;
   onToggleLike?: () => void;
   isFavorited?: boolean;
+  likeCount?: number;
   isLiked?: boolean;
   showFavoriteButton?: boolean;
   showLikeButton?: boolean;
@@ -31,6 +32,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
   onToggleLike,
   isFavorited = false,
   isLiked = false,
+  likeCount = 0,
   showFavoriteButton = true,
   showLikeButton = true,
   dashboardType,
@@ -57,7 +59,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
       {/* Image Section */}
       <div className="relative h-48 overflow-hidden">
         <img
-          src={recipe.imageUrl}
+          src={recipe.imageUrl ? recipe.imageUrl : "/api/placeholder/300/300"}
           alt={recipe.title}
           className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform duration-300"
           onClick={e => { e.stopPropagation(); navigate(recipeLink); }}
@@ -110,10 +112,10 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
         <div className="flex justify-between items-start mb-3">
           <div className="flex-1 mr-3">
             <h3
-              className="font-bold text-lg text-gray-800 hover:text-amber-600 cursor-pointer line-clamp-2 transition-colors duration-200"
+              className="font-bold overflow-hidden text-lg text-gray-800 hover:text-amber-600 cursor-pointer line-clamp-2 transition-colors duration-200"
               onClick={e => { e.stopPropagation(); navigate(recipeLink); }}
             >
-              {recipe.title}
+              {recipe.title.length > 20 ? recipe.title.slice(0, 20) + '…' : recipe.title}
             </h3>
           </div>
 

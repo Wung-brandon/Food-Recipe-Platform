@@ -168,6 +168,7 @@ const RecipeDetails: React.FC = () => {
               rating: Number(r.average_rating) || 0,
             }))
         );
+        console.log('Related recipes:', relatedRes.data.results);
       } else {
         setRelatedRecipes([]);
       }
@@ -952,7 +953,7 @@ const RecipeDetails: React.FC = () => {
             </div>
             
             {/* Related Recipes */}
-            {/* {relatedRecipes.length > 0 && (
+            {relatedRecipes.length > 0 && (
               <div className="bg-white p-6 rounded-lg shadow-sm">
                 <TitleText title="You Might Also Like"/>
                 <div className="space-y-4">
@@ -984,7 +985,7 @@ const RecipeDetails: React.FC = () => {
                   ))}
                 </div>
               </div>
-            )} */}
+            )}
           </div>
         </div>
       </div>

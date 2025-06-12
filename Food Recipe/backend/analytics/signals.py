@@ -87,11 +87,14 @@ def track_recipe_comment_manual(recipe, user=None, ip_address=None, session_key=
 
 def track_recipe_save_manual(recipe, user=None, ip_address=None, session_key=None, **kwargs):
     """Track when a recipe is saved/bookmarked"""
-    RecipeSave.objects.create(
+    # Avoid duplicate RecipeSave for the same user/recipe
+    RecipeSave.objects.get_or_create(
         recipe=recipe,
         user=user,
-        ip_address=ip_address,
-        session_key=session_key
+        defaults={
+            'ip_address': ip_address,
+            'session_key': session_key
+        }
     )
     
 def track_recipe_like_manual(recipe, user=None, ip_address=None, session_key=None, **kwargs):

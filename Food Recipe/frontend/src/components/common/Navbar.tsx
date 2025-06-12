@@ -6,11 +6,13 @@ import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import Badge, { BadgeProps } from '@mui/material/Badge';
 import { styled } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
+import { useCart } from '../../context/CartContext';
 
 const navLinks = [
   { name: 'Home', link: '/' },
   { name: 'Explore Recipe', link: '/explore-recipe' },
   { name: 'Shop', link: '/shop' },
+  // { name: 'Ingredients', link: '/ingredients' },
   { name: 'About Us', link: '/about' },
   { name: 'Contact Us', link: '/contact' },
 ];
@@ -29,6 +31,7 @@ const Navbar: React.FC = () => {
   const { i18n } = useTranslation();
   const navigate = useNavigate();
   const [isLanguageOpen, setIsLanguageOpen] = useState(false);
+  const { totalItems } = useCart();
 
   const handleMobileLinkClick = () => {
     setIsOpen(false); // close menu after clicking
@@ -93,7 +96,7 @@ const Navbar: React.FC = () => {
         {/* Desktop Buttons */}
         <div className="hidden md:flex space-x-4 items-center">
           <IconButton aria-label="cart" onClick={() => navigate('/cart')}>
-            <StyledBadge badgeContent={4} color="error">
+            <StyledBadge badgeContent={totalItems} color="error">
               <ShoppingCartIcon />
             </StyledBadge>
           </IconButton>

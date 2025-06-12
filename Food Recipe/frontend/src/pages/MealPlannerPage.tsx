@@ -423,7 +423,7 @@ const handleDeleteConfirm = async () => {
                       Meal Types to Include
                     </label>
                     <div className="grid grid-cols-2 gap-3">
-                      {['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Dessert'].map(mealType => (
+                      {['Breakfast', 'Lunch', 'Dinner'].map(mealType => (
                         <label
                           key={mealType}
                           className={`relative flex items-center p-4 border-2 rounded-xl cursor-pointer transition-all duration-200 hover:shadow-md ${

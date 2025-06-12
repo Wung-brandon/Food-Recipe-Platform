@@ -32,8 +32,19 @@ class CategorySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Category
-        fields = ['id', 'name', 'slug', 'image', 'description', 'recipe_count']
+        fields = ['id', 'name', 'slug', 'image', 'image_url', 'description', 'recipe_count']
 
+    def get_image(self, obj):
+        # Check for uploaded image first
+        if obj.image:
+            try:
+                if obj.image.url:  # This will raise an error if no file is associated
+                    return self.context['request'].build_absolute_uri(obj.image.url)
+            except (ValueError, AttributeError):
+                pass  # No valid image file
+        
+        # Fall back to image_url if no uploaded image
+        return obj.image_url
     def get_recipe_count(self, obj):
         # Use the related_name 'recipes' from Recipe.category FK
         return obj.recipes.count()
@@ -243,23 +254,44 @@ class RecipeListSerializer(serializers.ModelSerializer):
     like_count = serializers.IntegerField(read_only=True)
     is_favorited = serializers.SerializerMethodField()
     is_liked = serializers.SerializerMethodField()
-    
+    image = serializers.SerializerMethodField()
+    video = serializers.SerializerMethodField()
+
     class Meta:
         model = Recipe
         fields = [
-            'id', 'title', 'slug', 'description', 'image', 'video',
-            'preparation_time', 'cooking_time', 'servings', 'difficulty',
+            'id', 'title', 'slug', 'description', 'image', 'video', 'image_url',
+            'preparation_time', 'video_url', 'cooking_time', 'servings', 'difficulty',
             'calories', 'category', 'author', 'created_at',
             'average_rating', 'rating_count', 'like_count',
             'is_favorited', 'is_liked'
         ]
-    
+
+    def get_image(self, obj):
+        # Check for uploaded image first
+        if obj.image:
+            try:
+                if obj.image.url:  # This will raise an error if no file is associated
+                    return self.context['request'].build_absolute_uri(obj.image.url)
+            except (ValueError, AttributeError):
+                pass  # No valid image file
+        
+        # Fall back to image_url if no uploaded image
+        return obj.image_url
+
+    def get_video(self, obj):
+        # First check if there's an uploaded video with a URL
+        if obj.video and hasattr(obj.video, 'url') and obj.video.url:
+            return obj.video.url
+        # If no uploaded video, fall back to video_url
+        return obj.video_url
+
     def get_is_favorited(self, obj):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             return FavoriteRecipe.objects.filter(user=request.user, recipe=obj).exists()
         return False
-    
+
     def get_is_liked(self, obj):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
@@ -273,19 +305,31 @@ class RecipeDetailSerializer(RecipeListSerializer):
     tips = TipSerializer(many=True, read_only=True)
     tags = TagSerializer(many=True, read_only=True)
     comments = CommentSerializer(many=True, read_only=True)
-    
+    related_recipes = serializers.SerializerMethodField()
+
     class Meta(RecipeListSerializer.Meta):
-        fields = RecipeListSerializer.Meta.fields + ['ingredients', 'steps', 'tips', 'tags', 'comments']
+        fields = RecipeListSerializer.Meta.fields + ['ingredients', 'steps', 'tips', 'tags', 'comments', 'related_recipes']
+
+    def get_related_recipes(self, obj):
+        # Find related recipes by category and tags, excluding the current recipe
+        queryset = Recipe.objects.filter(category=obj.category).exclude(id=obj.id)
+        # Optionally, add more by tags
+        tag_ids = obj.tags.values_list('id', flat=True)
+        if tag_ids:
+            tag_related = Recipe.objects.filter(tags__in=tag_ids).exclude(id=obj.id)
+            queryset = queryset | tag_related
+        queryset = queryset.distinct()[:6]  # Limit to 6 related recipes
+        return RecipeListSerializer(queryset, many=True, context=self.context).data
 
 
 
 class RecipeCreateUpdateSerializer(serializers.ModelSerializer):
     # These will be handled as raw data and processed manually
-    ingredients = serializers.ListField(required=True, allow_empty=False, write_only=True)
-    steps = serializers.ListField(required=True, allow_empty=False, write_only=True)
+    ingredients = serializers.ListField(required=False, allow_empty=True, write_only=True)
+    steps = serializers.ListField(required=False, allow_empty=True, write_only=True)
     tips = serializers.ListField(required=False, allow_empty=True, write_only=True)
     tags = serializers.PrimaryKeyRelatedField(
-        many=True, 
+        many=True,
         queryset=Tag.objects.all(),
         required=False
     )
@@ -298,17 +342,38 @@ class RecipeCreateUpdateSerializer(serializers.ModelSerializer):
             'cooking_time', 'servings', 'difficulty', 'calories',
             'category', 'ingredients', 'steps', 'tips', 'tags'
         ]
-    
+
     def to_internal_value(self, data):
-        # Don't copy the whole QueryDict if it contains files!
-        # Instead, parse only the JSON string fields and build a dict for DRF
         parsed_data = {}
         for field in ['ingredients', 'steps', 'tips', 'tags']:
             value = data.get(field)
+            if field == 'tags' and value is not None:
+                # Accept both PKs and slugs for tags
+                if isinstance(value, str):
+                    try:
+                        loaded = json.loads(value)
+                    except Exception:
+                        loaded = value
+                else:
+                    loaded = value
+                # Convert slugs to PKs if needed
+                if isinstance(loaded, list):
+                    tag_pks = []
+                    for tag in loaded:
+                        if isinstance(tag, int):
+                            tag_pks.append(tag)
+                        elif isinstance(tag, str):
+                            tag_obj = Tag.objects.filter(slug=tag).first()
+                            if tag_obj:
+                                tag_pks.append(tag_obj.pk)
+                        # else ignore invalid
+                    parsed_data[field] = tag_pks
+                else:
+                    parsed_data[field] = loaded
+                continue
             if value and isinstance(value, str):
                 try:
                     loaded = json.loads(value)
-                    # Handle double-nested arrays
                     if isinstance(loaded, list) and len(loaded) == 1 and isinstance(loaded[0], list):
                         loaded = loaded[0]
                     parsed_data[field] = loaded
@@ -316,13 +381,21 @@ class RecipeCreateUpdateSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError({field: f"Invalid JSON format: {str(e)}"})
             elif value is not None:
                 parsed_data[field] = value
-
-        # Add all other fields (including files) as-is
         for key in data:
             if key not in parsed_data:
                 parsed_data[key] = data.get(key)
-
         return super().to_internal_value(parsed_data)
+
+    def validate(self, attrs):
+        # Only require ingredients and steps if not partial update
+        request = self.context.get('request')
+        is_partial = getattr(self, 'partial', False)
+        if not is_partial and (not attrs.get('ingredients') or len(attrs.get('ingredients', [])) == 0):
+            raise serializers.ValidationError({'ingredients': 'At least one ingredient is required.'})
+        if not is_partial and (not attrs.get('steps') or len(attrs.get('steps', [])) == 0):
+            raise serializers.ValidationError({'steps': 'At least one step is required.'})
+        return attrs
+
     def validate_ingredients(self, value):
         """Custom validation for ingredients"""
         print(f"Validating ingredients: {value}")  # Debug log
